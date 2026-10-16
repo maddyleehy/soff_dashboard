@@ -48,7 +48,7 @@ if uploaded_file is not None:
 
 st.write(
     pd.read_sql(
-        "PRAGMA table_info(vehicle_tracking)",
+        "PRAGMA table_info(bucket_history)",
         conn
     )
 )

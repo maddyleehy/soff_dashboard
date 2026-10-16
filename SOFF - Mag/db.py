@@ -21,11 +21,12 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS vehicle_tracking (
+        CREATE TABLE IF NOT EXISTS bucket_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             body_no TEXT NOT NULL,
-            loc_cd TEXT NOT NULL,
             bucket TEXT,
+            sub_bucket TEXT,
+            status TEXT,
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -48,27 +49,27 @@ def load_csv_to_db(csv_file_path):
     # Remove white spaces from columns
     df.columns = df.columns.str.strip()
     # Bucket logic
-    
-    df["BUCKET"] = df["LOC_CD"].apply(get_bucket) #new column named bucket = obtain loc_cd from get_bucket function
+     #new column named bucket = obtain loc_cd from get_bucket function
     df["last_updated"] = datetime.now() #new column name last_updated = current time
     
     # Rename columns to match database
-    df.rename(columns={"LOC_CD": "loc_cd", "BODY_NO": "body_no", "BUCKET": "bucket"}, inplace=True)
+    df.rename(columns={"BODY_NO": "body_no", "BUCKET": "bucket", "SUB_BUCKET": "sub_bucket", "STATUS": "status"}, inplace=True)
     
     # APPEND to database (keeps old data)
     df.to_sql(
-        'vehicle_tracking',
+        "bucket_history",
         conn,
         if_exists='append',  # ✅ APPEND instead of REPLACE
         index=False
     )
+    conn.commit()
     
     return len(df)
 
 # Load all records from SQLite
 df = pd.read_sql("""
 SELECT *
-FROM vehicle_tracking
+FROM bucket_history
 """, conn)
 
 

@@ -1,7 +1,6 @@
 import pandas as pd
 import sqlite3
 from datetime import datetime
-from utils import get_bucket
 
 # =====================================
 # INITIALIZE DATABASE TABLE
@@ -30,17 +29,40 @@ def init_db():
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS repair_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                body_no TEXT NOT NULL,
+                seq TEXT,
+                station TEXT,
+                work_no TEXT,
+                facility TEXT,
+                inspection_date TEXT,
+                facility_inspec_count TEXT,
+                total_result TEXT,
+                last_result TEXT,
+                repairer TEXT,
+                repair_location TEXT,
+                repair_date TEXT,
+                repair_yn TEXT,
+                defect_desc TEXT,
+                memo TEXT,
+                confirmer TEXT,
+                confirm_date TEXT,
+                detail_work TEXT,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
     conn.commit()
 
-init_db()
 
 
 # =====================================
 # LOAD AND APPEND CSV DATA
 # =====================================
 
-def load_csv_to_db(csv_file_path):
+def load_bucket_csv_to_db(csv_file_path):
     """Load CSV and APPEND to database (keeps old data)"""
     
     # Load CSV
@@ -66,10 +88,45 @@ def load_csv_to_db(csv_file_path):
     
     return len(df)
 
-# Load all records from SQLite
-df = pd.read_sql("""
-SELECT *
-FROM bucket_history
-""", conn)
+def load_repair_csv_to_db(csv_file_path):
+    df = pd.read_csv(csv_file_path)
 
+    df.columns = df.columns.str.strip()
+    print(df.columns.tolist())
+    df.rename(
+        columns={
+            "BODY NO": "body_no",
+            "SEQ": "seq",
+            "Station": "station",
+            "Work No": "work_no",
+            "Facility": "facility",
+            "Inspection Date": "inspection_date",
+            "Facility Inspec Count": "facility_inspec_count",
+            "Total Result": "total_result",
+            "Last Result": "last_result",
+            "Repairer": "repairer",
+            "Repair Location": "repair_location",
+            "Repair date": "repair_date",
+            "Repair Y/N": "repair_yn",
+            "Defect Desc": "defect_desc",
+            "Memo": "memo",
+            "Confirmer": "confirmer",
+            "Confirm date": "confirm_date",
+            "Detail Work": "detail_work"
+        },
+        inplace=True
+    )
+
+    df["last_updated"] = datetime.now()
+
+    df.to_sql(
+        "repair_history",
+        conn,
+        if_exists="append",
+        index=False
+    )
+
+    conn.commit()
+
+    return len(df)
 

@@ -79,7 +79,8 @@ def init_db():
     # Create DB Table for Dashboard Summary
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS dashboard_summary(
-        body_no TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body_no TEXT,
         bucket TEXT,
         sub_bucket TEXT,
         status TEXT,
@@ -88,7 +89,7 @@ def init_db():
         repair_completed INTEGER,
         quality_accepted INTEGER,
         vehicle_status TEXT,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+        snapshot_dt DATETIME
     )
 
     """
@@ -192,5 +193,9 @@ def load_defect_csv_to_db(csv_file_path):
 
 def load_dashboard_summary_to_db(summary_df):
     summary_df.to_sql(
-        "dashboard_query"
+        "dashboard_summary",
+        conn,
+        if_exists = "replace",
+        index=False
     )
+    conn.commit()

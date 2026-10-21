@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
-from db import (load_bucket_csv_to_db, load_defect_csv_to_db, init_db)
+from db import (load_bucket_csv_to_db, load_defect_csv_to_db, load_dashboard_summary_to_db, init_db)
 init_db()
 
 # =====================================
@@ -159,9 +159,8 @@ st.dataframe(
 
 # Defect Count Logic
 
-wip_list = bucket_vehicles_df["body_no"].unique().tolist() 
-
-placeholders = ",".join(["?"] * len(wip_list))
+all_wip_list = latest_bucket_df["body_no"].unique().tolist()
+placeholders = ",".join(["?"] * len(all_wip_list))
 query = f"""
     SELECT
         body_no,
@@ -205,16 +204,19 @@ query = f"""
 
     GROUP BY body_no
     """
-defect_summary = pd.read_sql(
-    query,
-    conn,
-    params=wip_list
-) 
+# defect_summary = pd.read_sql(
+#     query,
+#     conn,
+#     params=all_wip_list
+# ) 
+# Dashboard Summary for cars in all buckets
 
 
-vehicle_summary = bucket_vehicles_df.merge(defect_summary, on="body_no", how="left")
+all_defect_summary = pd.read_sql(query, conn, params=all_wip_list)
+all_vehicle_summary = latest_bucket_df.merge(all_defect_summary, on="body_no", how="left")
+
 for col in ["defect_count", "repair_started", "repair_completed", "quality_accepted"]:
-    vehicle_summary[col] = (vehicle_summary[col].fillna(0).astype(int))
+    all_vehicle_summary[col] = (all_vehicle_summary[col].fillna(0).astype(int))
 
 def get_vehicle_status(row):
 
@@ -238,7 +240,18 @@ def get_vehicle_status(row):
     else:
         return "Repair In Progress"
 
-vehicle_summary["vehicle_status"] = vehicle_summary.apply(get_vehicle_status, axis=1)
+all_vehicle_summary["vehicle_status"] = all_vehicle_summary.apply(get_vehicle_status, axis=1)
+# Load Dashboard to DB Button
+if st.button("Load Database Snapshot", type="primary"):
+    dashboard_summary = all_vehicle_summary.copy()
+    dashboard_summary["snapshot_dt"] = datetime.now()
+    load_dashboard_summary_to_db(dashboard_summary)
+    st.success(
+        f"Loaded {len(dashboard_summary)} rows"
+    )
+
+# Specific Bucket Defect
+vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bucket]
 
 st.subheader("Defect Summary")
 

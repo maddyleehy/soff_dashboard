@@ -76,34 +76,24 @@ def init_db():
                 last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
-    # cursor.execute("""
-    #         CREATE TABLE IF NOT EXISTS defect_history (
-    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
-    #
-    #             body_no TEXT NOT NULL,
-    #             seq TEXT,
-    #             station TEXT,
-    #             work_no TEXT,
-    #             facility TEXT,
-    #             inspection_date TEXT,
-    #             facility_inspec_count TEXT,
-    #             total_result TEXT,
-    #             last_result TEXT,
-    #             repairer TEXT,
-    #             repair_location TEXT,
-    #             repair_date TEXT,
-    #             repair_yn TEXT,
-    #             defect_desc TEXT,
-    #             memo TEXT,
-    #             confirmer TEXT,
-    #             confirm_date TEXT,
-    #             detail_work TEXT,
-    #             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-    #             UNIQUE(body_no, seq, station, work_no, facility, inspection_date, facility_inspec_count, 
-    #             total_result, last_result, repairer, repair_location, repair_date, repair_yn, defect_desc, 
-    #             memo, confirmer, confirm_date, detail_work)
-    #         )
-    #     """)
+    # Create DB Table for Dashboard Summary
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS dashboard_summary(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body_no TEXT,
+        bucket TEXT,
+        sub_bucket TEXT,
+        status TEXT,
+        defect_count INTEGER,
+        repair_started INTEGER,
+        repair_completed INTEGER,
+        quality_accepted INTEGER,
+        vehicle_status TEXT,
+        snapshot_dt DATETIME
+    )
+
+    """
+    )
 
     conn.commit()
 
@@ -183,7 +173,7 @@ def load_defect_csv_to_db(csv_file_path):
     master_df = pd.read_csv("data/master_codes.csv")
     master_df.columns = master_df.columns.str.strip()
 
-    code_dict = dict(zip(master_df["Code"], master_df["English"]))
+    code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
     df["inspec_part_nm"] = df["inspec_part_cd"].map(code_dict)
     df["fault_nm"] = df["fault_cd"].map(code_dict)
     df["dtl_part_nm"] = df["dtl_part_cd"].map(code_dict)
@@ -201,3 +191,11 @@ def load_defect_csv_to_db(csv_file_path):
 
     return len(df)
 
+def load_dashboard_summary_to_db(summary_df):
+    summary_df.to_sql(
+        "dashboard_summary",
+        conn,
+        if_exists = "replace",
+        index=False
+    )
+    conn.commit()

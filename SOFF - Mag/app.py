@@ -97,12 +97,12 @@ latest_bucket_df = get_latest_bucket(conn)
 
 # Defect Count Logic
 
-all_wip_list = latest_bucket_df["body_no"].unique().tolist()
+all_wip_list = latest_bucket_df["body_no"].unique().tolist() #list of unsigned off vehicles
 
 
-all_defect_summary = get_defect_summary(conn, all_wip_list)
-all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary)
-st.subheader("Search Vehicle")
+all_defect_summary = get_defect_summary(conn, all_wip_list) #defect count logic for unsigned off vehicles
+all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary) #bucket and defect count for unsigned off vehicles
+st.subheader("Search Vehicle") 
 
 search_body = st.text_input(
     "Enter Body No",
@@ -140,7 +140,7 @@ if bucket_summary.empty:
     st.stop()
 cols = st.columns(len(bucket_summary))
 
-for i, row in enumerate(bucket_summary.itertuples()):
+for i, row in enumerate(bucket_summary.itertuples()): 
 
     with cols[i]:
 

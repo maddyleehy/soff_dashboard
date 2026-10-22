@@ -13,7 +13,7 @@ def get_bucket(loc):
             return "QC Process"
 
 
-def get_latest_bucket(conn):
+def get_latest_bucket(conn): #takes the list of vehicles from bucket.csv added today
     return pd.read_sql(
     """
     SELECT *
@@ -26,14 +26,14 @@ def get_latest_bucket(conn):
     conn
 )
 
-def get_bucket_summary(bucket_df):
+def get_bucket_summary(bucket_df): #output of latest bucket combined with defects
      return (bucket_df
          .groupby("bucket")
          .size()
          .reset_index(name="vehicle_count")
          .sort_values("vehicle_count", ascending=False))
 
-def get_defect_summary(conn, body_list):
+def get_defect_summary(conn, body_list): #repair count logic (num defect counts, repair started, repair completed, quality accepted) for all cars
     if not body_list:
         return pd.DataFrame()
     placeholders = ",".join(["?"]*len(body_list))
@@ -82,7 +82,7 @@ def get_defect_summary(conn, body_list):
     """
     return pd.read_sql(query, conn, params=body_list)
 
-def get_vehicle_status(row):
+def get_vehicle_status(row): #repair status logic per vehicle
 
     defects = row["defect_count"]
     started = row["repair_started"]
@@ -105,7 +105,7 @@ def get_vehicle_status(row):
         return "Repair In Progress"
 
 
-def build_vehicle_summary(bucket_df, defect_summary):
+def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect count df
     vehicle_summary = bucket_df.merge(
         defect_summary,
         on="body_no",

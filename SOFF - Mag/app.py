@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from db import (load_bucket_csv_to_db, load_defect_csv_to_db, load_dashboard_summary_to_db, init_db)
+from utils import (get_bucket, get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary)
 init_db()
 
 # =====================================
@@ -75,6 +76,7 @@ defect_count = pd.read_sql(
     conn
 )
 
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -88,30 +90,40 @@ with col2:
         "Defect Records",
         int(defect_count.iloc[0]["cnt"])
     )
+    
+latest_bucket_df = get_latest_bucket(conn)
 
+# Defect Count Logic
+
+all_wip_list = latest_bucket_df["body_no"].unique().tolist()
+
+
+all_defect_summary = get_defect_summary(conn, all_wip_list)
+all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary)
+st.subheader("Search Vehicle")
+
+search_body = st.text_input(
+    "Enter Body No",
+    placeholder="e.g. ABC123"
+)
+
+if search_body:
+    search_result = all_vehicle_summary[
+        all_vehicle_summary["body_no"]
+        .str.contains(search_body, case=False, na=False)
+    ]
+
+    st.dataframe(
+        search_result,
+        width="stretch",
+        hide_index=True
+    )
+    
 # Bucket UI
-latest_bucket_df = pd.read_sql(
-"""
-SELECT *
-FROM bucket_history
-WHERE last_updated = (
-SELECT MAX(last_updated)
-FROM bucket_history
-)
-""",
-conn
-)
 
 st.header("Vehicle Buckets")
 
-bucket_summary = (
-    latest_bucket_df
-    .groupby("bucket")
-    .size()
-    .reset_index(name="vehicle_count")
-    .sort_values("vehicle_count", ascending=False)
-)
-
+bucket_summary = get_bucket_summary(latest_bucket_df)
 # st.dataframe(
 #     bucket_summary,
 #     width="stretch",
@@ -121,6 +133,9 @@ bucket_summary = (
 # Selected Bucket and display list of vehicles under it
 st.subheader("Vehicle Buckets")
 
+if bucket_summary.empty:
+    st.warning("No bucket data available.")
+    st.stop()
 cols = st.columns(len(bucket_summary))
 
 for i, row in enumerate(bucket_summary.itertuples()):
@@ -157,90 +172,6 @@ st.dataframe(
     hide_index=True
 )
 
-# Defect Count Logic
-
-all_wip_list = latest_bucket_df["body_no"].unique().tolist()
-placeholders = ",".join(["?"] * len(all_wip_list))
-query = f"""
-    SELECT
-        body_no,
-
-        COUNT(*) AS defect_count,
-
-        SUM(
-            CASE
-                WHEN repair_start_dt IS NOT NULL
-                 AND repair_start_dt <> ''
-                THEN 1
-                ELSE 0
-            END
-        ) AS repair_started,
-
-        SUM(
-            CASE
-                WHEN repair_end_dt IS NOT NULL
-                 AND repair_end_dt <> ''
-                THEN 1
-                ELSE 0
-            END
-        ) AS repair_completed,
-
-        SUM(
-            CASE
-                WHEN confirm_yn = 'Y'
-                THEN 1
-                ELSE 0
-            END
-        ) AS quality_accepted
-
-    FROM defect_history
-
-    WHERE last_updated = (
-        SELECT MAX(last_updated)
-        FROM defect_history
-    )
-
-    AND body_no IN ({placeholders})
-
-    GROUP BY body_no
-    """
-# defect_summary = pd.read_sql(
-#     query,
-#     conn,
-#     params=all_wip_list
-# ) 
-# Dashboard Summary for cars in all buckets
-
-
-all_defect_summary = pd.read_sql(query, conn, params=all_wip_list)
-all_vehicle_summary = latest_bucket_df.merge(all_defect_summary, on="body_no", how="left")
-
-for col in ["defect_count", "repair_started", "repair_completed", "quality_accepted"]:
-    all_vehicle_summary[col] = (all_vehicle_summary[col].fillna(0).astype(int))
-
-def get_vehicle_status(row):
-
-    defects = row["defect_count"]
-    started = row["repair_started"]
-    completed = row["repair_completed"]
-    accepted = row["quality_accepted"]
-
-    if defects == 0:
-        return "No Defects"
-
-    elif started == 0:
-        return "Repair Pending"
-
-    elif accepted == defects:
-        return "Quality Accepted"
-
-    elif completed == defects:
-        return "Repair Completed, Pending QC"
-
-    else:
-        return "Repair In Progress"
-
-all_vehicle_summary["vehicle_status"] = all_vehicle_summary.apply(get_vehicle_status, axis=1)
 # Load Dashboard to DB Button
 if st.button("Load Database Snapshot", type="primary"):
     dashboard_summary = all_vehicle_summary.copy()
@@ -253,10 +184,18 @@ if st.button("Load Database Snapshot", type="primary"):
 # Specific Bucket Defect
 vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bucket]
 
-st.subheader("Defect Summary")
+# st.subheader("Defect Summary")
 
+# st.dataframe(
+#     vehicle_summary,
+#     width="stretch",
+#     hide_index=True
+# )
+
+# Display Latest Dashboard Summary
+st.subheader("Latest Dashboard Summary")
 st.dataframe(
-    vehicle_summary,
+    all_vehicle_summary,
     width="stretch",
     hide_index=True
 )

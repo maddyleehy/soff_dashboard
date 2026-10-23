@@ -8,7 +8,7 @@ from db import (
     load_parts_csv_to_db, 
     load_dashboard_summary_to_db, 
     init_db,)
-from utils import (get_bucket, get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary)
+from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary)
 
 #Load once helper function
 
@@ -125,24 +125,8 @@ all_wip_list = latest_bucket_df["body_no"].unique().tolist() #list of unsigned o
 
 all_defect_summary = get_defect_summary(conn, all_wip_list) #defect count logic for unsigned off vehicles
 all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary) #bucket and defect count for unsigned off vehicles
-st.subheader("Search Vehicle") 
 
-search_body = st.text_input(
-    "Enter Body No",
-    placeholder="e.g. ABC123"
-)
 
-if search_body:
-    search_result = all_vehicle_summary[
-        all_vehicle_summary["body_no"]
-        .str.contains(search_body, case=False, na=False)
-    ]
-
-    st.dataframe(
-        search_result,
-        width="stretch",
-        hide_index=True
-    )
     
 # ===========================================
 # Vehicle Buckets UI
@@ -158,6 +142,11 @@ if bucket_summary.empty:
     st.stop()
 cols = st.columns(len(bucket_summary))
 
+bucket_order = ["PC-HC1","HC1-HC3","INITIAL","HC4-HC5","FC1-FC2", "ROAD, BSR, WATER", "FINAL", "REPAIR"]
+# Reorder dataframe
+bucket_summary = (
+    bucket_summary.set_index("bucket").reindex(bucket_order).reset_index()
+)
 for i, row in enumerate(bucket_summary.itertuples()): 
     with cols[i]:
         if st.button(
@@ -179,6 +168,7 @@ st.write(f"Selected Bucket: {selected_bucket}")
 bucket_vehicles_df = latest_bucket_df[
     latest_bucket_df["bucket"] == selected_bucket
 ]
+#print(latest_bucket_df)
 
 st.subheader(f"Vehicles in {selected_bucket}")
 
@@ -188,6 +178,7 @@ st.dataframe(
             "body_no",
             "sub_bucket_nm",
             "status_nm"
+            #"parts_ETA"
         ]
     ],
     width="stretch",
@@ -221,45 +212,100 @@ st.dataframe(
     hide_index=True
 )
 
+
+# ===========================================
+# Search Vehicle
+# ===========================================
+
+
+st.subheader("Search Vehicle") 
+search_body = st.text_input(
+    "Enter Body No",
+    placeholder="e.g. ABC123"
+)
+
+if search_body:
+    search_result = all_vehicle_summary[
+        all_vehicle_summary["body_no"]
+        .str.contains(search_body, case=False, na=False)
+    ]
+
+    st.dataframe(
+        search_result,
+        width="stretch",
+        hide_index=True
+    )
+
+    pending_parts = pd.read_sql(
+        "SELECT * FROM parts_history WHERE body_no = ? and last_updated = (SELECT MAX(last_updated) from parts_history where body_no = ?)",
+        conn,
+        params = [search_body, search_body]
+    )
+
+    st.subheader (f"Parts for {search_body}")
+    st.dataframe(
+        pending_parts,
+        width = "stretch",
+        hide_index = True
+    )
+
+    defect_history = pd.read_sql(
+        """
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
+        FROM defect_history 
+        WHERE body_no = ? and last_updated = (SELECT MAX (last_updated) from defect_history where body_no = ?)""",
+        conn,
+        params = [search_body, search_body]
+    )
+
+    st.subheader (f"Defect for {search_body}")
+    st.dataframe(
+        defect_history,
+        width = "stretch",
+        hide_index = True
+        )
+
+
+
 # ===========================================
 # Bucket History Table UI
 # ===========================================
-st.subheader("Bucket History Table")
-bucket_df = pd.read_sql(
-    """
-    SELECT *
-    FROM bucket_history
-    ORDER BY last_updated DESC
-    LIMIT 100
-    """,
-    conn
-)
-st.dataframe(
-    bucket_df,
-    use_container_width=True,
-    hide_index=True
-)
+#st.subheader("Bucket History Table")
+#bucket_df = pd.read_sql(
+#    """
+#    SELECT *
+#    FROM bucket_history
+#    ORDER BY last_updated DESC
+#    LIMIT 100
+#    """,
+#    conn
+#)
+#st.dataframe(
+#    bucket_df,
+#    use_container_width=True,
+#    hide_index=True
+#)
 
 
 # ===========================================
 # Defect History Table UI
 # ===========================================
-st.subheader("Defect History Table")
-defect_df = pd.read_sql(
-    """
-    SELECT *
-    FROM defect_history
-    ORDER BY last_updated DESC
-    LIMIT 100
-    """,
-    conn
-)
-
-st.dataframe(
-    defect_df,
-    use_container_width=True,
-    hide_index=True
-)
-
-cursor = conn.cursor()
-
+#st.subheader("Defect History Table")
+#defect_df = pd.read_sql(
+#    """
+#    SELECT *
+#    FROM defect_history
+#    ORDER BY last_updated DESC
+#    LIMIT 100
+#    """,
+#    conn
+#)
+#
+#st.dataframe(
+#    defect_df,
+#    use_container_width=True,
+#    hide_index=True
+#)
+#
+#cursor = conn.cursor()
+#

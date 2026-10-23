@@ -229,6 +229,10 @@ def load_defect_csv_to_db(csv_file_path):
     master_df.columns = master_df.columns.str.strip()
 
     code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
+
+    cols = ["body_no", "sub_proc_cd", "inspec_part_cd", "fault_cd", "dtl_part_cd", "stn_cd", "fault_input_dt"]
+    df["unique_id"] = df[cols].fillna("").astype(str).agg("_".join, axis=1)
+
     df["inspec_part_nm"] = df["inspec_part_cd"].map(code_dict)
     df["fault_nm"] = df["fault_cd"].map(code_dict)
     df["dtl_part_nm"] = df["dtl_part_cd"].map(code_dict)

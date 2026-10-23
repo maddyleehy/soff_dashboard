@@ -19,17 +19,23 @@ def init_db():
 
     cursor = conn.cursor()
 
-    cursor.execute("""
+#create tables with header name and respective data type
+    #Bucket db table
+    cursor.execute(""" 
         CREATE TABLE IF NOT EXISTS bucket_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             body_no TEXT NOT NULL,
             bucket TEXT,
             sub_bucket TEXT,
+            sub_bucket_nm TEXT,
             status TEXT,
+            status_nm TEXT,
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(body_no, bucket, sub_bucket, status)
         )
     """)
+
+    #Defect db table
     cursor.execute("""
             CREATE TABLE IF NOT EXISTS defect_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +82,22 @@ def init_db():
                 last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+    #Parts ETA db table
+    cursor.execute(""" 
+        CREATE TABLE IF NOT EXISTS parts_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            body_no TEXT NOT NULL,
+            part_no TEXT,
+            part_name TEXT,
+            eta DATETIME,
+            status TEXT,
+            cell_cd TEXT,
+            text TEXT,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+    """)
+    
     # Create DB Table for Dashboard Summary
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS dashboard_summary(
@@ -97,10 +119,28 @@ def init_db():
 
     conn.commit()
 
+# =====================================
+# CONVERTS EPOCH/INTEGER TO DT FORMAT
+# =====================================
+
+def normalize_datetime(value):
+    """Convert any supported raw format to 'YYYY-MM-DD HH:MM:SS' (or date-only)."""
+    if pd.isna(value):
+        return None
+    s = str(value).strip().removesuffix(".0")
+    if not s or not s.isdigit():
+        return None
+    if len(s) == 14:                      # 20260911104917
+        return datetime.strptime(s, "%Y%m%d%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    if len(s) == 13:                      # 1791880000000 (epoch ms, UTC)
+        return pd.to_datetime(int(s), unit="ms").strftime("%Y-%m-%d %H:%M:%S")
+    if len(s) == 8:                       # 20261013
+        return datetime.strptime(s, "%Y%m%d").strftime("%Y-%m-%d")
+    return None                           # unknown format: store NULL and inspect
 
 
 # =====================================
-# LOAD AND APPEND CSV DATA
+# LOAD AND APPEND CSV DATA (Bucket)
 # =====================================
 
 def load_bucket_csv_to_db(csv_file_path):
@@ -111,22 +151,37 @@ def load_bucket_csv_to_db(csv_file_path):
 
     # Remove white spaces from columns
     df.columns = df.columns.str.strip()
+    
     # Bucket logic
      #new column named bucket = obtain loc_cd from get_bucket function
     df["last_updated"] = datetime.now() #new column name last_updated = current time 
+    
     # Rename columns to match database
     df.rename(columns={"BODY_NO": "body_no", "BUCKET": "bucket", "SUB_BUCKET": "sub_bucket", "STATUS": "status"}, inplace=True)
+
+    # Map code to description using master tables
+    master_df = pd.read_csv("data/master_codes.csv")
+    master_df.columns = master_df.columns.str.strip()
+    code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
+    df["sub_bucket_nm"] = df["sub_bucket"].map(code_dict)
+    df["status_nm"] = df["status"].map(code_dict)
+    df["last_updated"] = datetime.now()
     
-    # APPEND to database (keeps old data)
     df.to_sql(
         "bucket_history",
         conn,
-        if_exists='append',  # ✅ APPEND instead of REPLACE
+        if_exists="append",
         index=False
     )
     conn.commit()
     
     return len(df)
+  
+    
+
+# =====================================
+# LOAD AND APPEND CSV DATA (Defect)
+# =====================================
 
 def load_defect_csv_to_db(csv_file_path):
     df = pd.read_csv(csv_file_path)
@@ -190,6 +245,42 @@ def load_defect_csv_to_db(csv_file_path):
     conn.commit()
 
     return len(df)
+
+
+# =====================================
+# LOAD AND APPEND CSV DATA (Parts)
+# =====================================
+
+def load_parts_csv_to_db(csv_file_path):
+    df = pd.read_csv(csv_file_path)
+    df.columns = df.columns.str.strip()
+    keep_cols = ["status",
+        "eta",
+        "body_no",
+        "part_no",
+        "part_name",
+        "cell_cd",
+        "text"
+        ]
+    df = df[keep_cols]
+   
+    df.columns = [col.lower() for col in df.columns]
+    df.to_sql(
+        "parts_history",
+        conn,
+        if_exists="append",
+        index=False
+    )
+
+    conn.commit()
+
+    return len(df)
+
+# =====================================
+# Dashboard summary DB
+# =====================================
+
+
 
 def load_dashboard_summary_to_db(summary_df):
     summary_df.to_sql(

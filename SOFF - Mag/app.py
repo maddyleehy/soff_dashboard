@@ -140,13 +140,27 @@ st.subheader("Vehicle Buckets") # Selected Bucket and display list of vehicles u
 if bucket_summary.empty:
     st.warning("No bucket data available.")
     st.stop()
-cols = st.columns(len(bucket_summary))
+
+
+# trial 1 remove : cols = st.columns(len(bucket_summary))
 
 bucket_order = ["PC-HC1","HC1-HC3","INITIAL","HC4-HC5","FC1-FC2", "ROAD, BSR, WATER", "FINAL", "REPAIR"]
-# Reorder dataframe
-bucket_summary = (
-    bucket_summary.set_index("bucket").reindex(bucket_order).reset_index()
+
+bucket_summary["bucket_order"] = pd.Categorical(
+    bucket_summary["bucket"], categories=bucket_order, ordered=True
 )
+bucket_summary = (
+    bucket_summary.sort_values("bucket_order")
+    .drop(columns="bucket_order")
+    .reset_index(drop=True)
+)
+
+cols = st.columns(len(bucket_summary))
+
+#trial 1 remove belwo 3 hash Reorder dataframe
+#bucket_summary = (
+#    bucket_summary.set_index("bucket").reindex(bucket_order).reset_index()
+#)
 for i, row in enumerate(bucket_summary.itertuples()): 
     with cols[i]:
         if st.button(

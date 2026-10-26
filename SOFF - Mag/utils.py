@@ -38,13 +38,17 @@ def get_bucket_summary(bucket_df): #output of latest bucket combined with defect
          .sort_values("vehicle_count", ascending=False))
 
 
-# =====================================
-# Defect Logic
-# =====================================
+## =====================================
+## Defect Logic
+## =====================================
 
 def get_defect_summary(conn, body_list): #repair count logic (num defect counts, repair started, repair completed, quality accepted) for all cars
     if not body_list:
-        return pd.DataFrame()
+        #return pd.DataFrame()
+        return pd.DataFrame(columns=[
+        "body_no", "defect_count", "pending_repair",
+        "repair_in_progress", "pending_quality", "quality_accepted",
+    ])
     placeholders = ",".join(["?"]*len(body_list)) #
     query = f"""
     SELECT
@@ -52,10 +56,11 @@ def get_defect_summary(conn, body_list): #repair count logic (num defect counts,
 
         COUNT(*) AS defect_count,
 
+        
         SUM(
             CASE
                 WHEN repair_start_dt IS NULL
-                 AND repair_start_dt = ''
+                 OR repair_start_dt = ''
                 THEN 1
                 ELSE 0
             END
@@ -65,8 +70,8 @@ def get_defect_summary(conn, body_list): #repair count logic (num defect counts,
             CASE
                 WHEN repair_start_dt IS NOT NULL
                  AND repair_start_dt <> ''
-                 AND repair_end_dt IS NULL
-                 AND repair_end_dt = ''
+                 AND (repair_end_dt IS NULL OR repair_end_dt = '')       
+                 AND confirm_yn = 'N'
                 THEN 1
                 ELSE 0
             END
@@ -76,7 +81,7 @@ def get_defect_summary(conn, body_list): #repair count logic (num defect counts,
             CASE
                 WHEN repair_end_dt IS NOT NULL
                  AND repair_end_dt <> ''
-                 and confirm_yn = 'N'
+                 AND confirm_yn = 'N'
                 THEN 1
                 ELSE 0
             END
@@ -105,13 +110,14 @@ def get_defect_summary(conn, body_list): #repair count logic (num defect counts,
 
 def get_vehicle_status(row): #repair status logic per vehicle
 
-    defects = row["defect_count"]
-    #pending_repair = row["pending_repair"]
+    
+    defect_count = row["defect_count"]
+    pending_repair = row["pending_repair"]
     repair_in_progress = row["repair_in_progress"]
     pending_quality = row["pending_quality"]
     quality_accepted = row["quality_accepted"]
 
-    if defects == 0:
+    if defect_count == 0:
         return "No Defects"
 
     elif repair_in_progress > 0:
@@ -120,11 +126,14 @@ def get_vehicle_status(row): #repair status logic per vehicle
     elif pending_quality > 0 :
         return "Quality Accepted"
 
-    elif pending_quality + quality_accepted == defects:
+    elif pending_quality + quality_accepted == defect_count:
         return "Repair Completed, Pending QC"
 
+    elif pending_repair > 0:
+        return "Pending Repair Start"
+
     else:
-        return "Pending Repair"
+        return "Unknown"
 
 
      
@@ -157,7 +166,8 @@ def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect
     metric_cols = [
         "defect_count",
         "pending_repair",
-        "repair_completed",
+        "repair_in_progress",
+        "pending_quality",
         "quality_accepted"
     ]
 
@@ -179,6 +189,5 @@ def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect
  #       )
 
     return vehicle_summary 
-
 
      

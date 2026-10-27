@@ -188,4 +188,7 @@ def previous_status(conn, row):
         return None
     return df.iloc[0]["vehicle_status"]
 
+def get_previous_status(conn, row):
+    return previous_status(conn, row)
+
 # sample logic: all_vehicle_summary["last_status"] = all_vehicle_summary.apply(previous_status(conn, row))

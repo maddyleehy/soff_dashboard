@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import datetime, timezone
 
 # =====================================
 # Bucket Logic
@@ -192,3 +193,49 @@ def get_previous_status(conn, row):
     return previous_status(conn, row)
 
 # sample logic: all_vehicle_summary["last_status"] = all_vehicle_summary.apply(previous_status(conn, row))
+
+# =====================================
+# DT conversion
+# =====================================
+
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+DATE_FORMAT = "%Y-%m-%d"
+
+def to_db_datetime(value, date_only=False):
+    """
+    Convert a raw value to 'YYYY-MM-DD HH:MM:SS' (or 'YYYY-MM-DD' if date_only).
+    Supports:
+      - 14 digits  -> YYYYMMDDhhmmss   (e.g. 20261005142201)
+      - 13 digits  -> epoch milliseconds, UTC (e.g. 1791880000000)
+      - 8 digits   -> YYYYMMDD         (e.g. 20261005)
+      - Text dates -> parsed by pandas (e.g. 2026-10-05 14:22:01)
+    Returns None for blanks or unparseable values.
+    """
+    if pd.isna(value):
+        return None
+
+    s = str(value).strip()
+    if s.endswith(".0"):            # Excel/float artifact: 20261005142201.0
+        s = s[:-2]
+    if s == "" or s.lower() in ("null", "nan", "none"):
+        return None
+
+    try:
+        if s.isdigit():
+            if len(s) == 14:
+                dt = datetime.strptime(s, "%Y%m%d%H%M%S")
+            elif len(s) == 13:
+                dt = datetime.fromtimestamp(int(s) / 1000, tz=timezone.utc).replace(tzinfo=None)
+            elif len(s) == 8:
+                dt = datetime.strptime(s, "%Y%m%d")
+            else:
+                return None
+        else:
+            parsed = pd.to_datetime(s, errors="coerce")
+            if pd.isna(parsed):
+                return None
+            dt = parsed.to_pydatetime()
+    except ValueError:
+        return None
+
+    return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)

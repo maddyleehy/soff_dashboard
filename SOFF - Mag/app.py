@@ -8,7 +8,7 @@ from db import (
     load_parts_csv_to_db, 
     load_dashboard_summary_to_db, 
     init_db,)
-from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary)
+from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary, previous_status)
 
 #Load once helper function
 
@@ -122,8 +122,8 @@ latest_bucket_df = get_latest_bucket(conn)
 # Defect Count Logic
 all_wip_list = latest_bucket_df["body_no"].unique().tolist() #list of unsigned off vehicles
 
-
 all_defect_summary = get_defect_summary(conn, all_wip_list) #defect count logic for unsigned off vehicles
+
 all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary) #bucket and defect count for unsigned off vehicles
 
 
@@ -141,9 +141,6 @@ if bucket_summary.empty:
     st.warning("No bucket data available.")
     st.stop()
 
-
-# trial 1 remove : cols = st.columns(len(bucket_summary))
-
 bucket_order = ["PC-HC1","HC1-HC3","INITIAL","HC4-HC5","FC1-FC2", "ROAD, BSR, WATER", "FINAL", "REPAIR"]
 
 bucket_summary["bucket_order"] = pd.Categorical(
@@ -157,10 +154,7 @@ bucket_summary = (
 
 cols = st.columns(len(bucket_summary))
 
-#trial 1 remove belwo 3 hash Reorder dataframe
-#bucket_summary = (
-#    bucket_summary.set_index("bucket").reindex(bucket_order).reset_index()
-#)
+
 for i, row in enumerate(bucket_summary.itertuples()): 
     with cols[i]:
         if st.button(
@@ -220,8 +214,13 @@ vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bu
 # ===========================================
 
 st.subheader("Latest Dashboard Summary")
+
+latest_dashboard = all_vehicle_summary.copy()
+latest_dashboard = latest_dashboard.drop(columns=["sub_bucket", "status"]) 
+latest_dashboard["last_status"] = latest_dashboard.apply(previous_status, conn = conn)
+
 st.dataframe(
-    all_vehicle_summary,
+    latest_dashboard,
     width="stretch",
     hide_index=True
 )

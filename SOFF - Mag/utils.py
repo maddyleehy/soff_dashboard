@@ -4,18 +4,6 @@ import pandas as pd
 # Bucket Logic
 # =====================================
 
-#def get_bucket(loc):
-#        if loc == "PC010":
-#            return "PC-HC1"
-#        elif loc in ["HC010", "HC020", "HC030"]:
-#            return "HC1-HC3"
-#        elif loc in ["HC040", "HC050"]:
-#            return "HC4-HC5"
-#        elif loc in ["FC010", "FC020"]:
-#            return "FC1-FC2"
-#        else:
-#            return "QC Process"
-
 
 def get_latest_bucket(conn): #takes the list of vehicles from bucket.csv added today
     return pd.read_sql(
@@ -109,7 +97,6 @@ def get_defect_summary(conn, body_list): #repair count logic (num defect counts,
     return pd.read_sql(query, conn, params=body_list)
 
 def get_vehicle_status(row): #repair status logic per vehicle
-
     
     defect_count = row["defect_count"]
     pending_repair = row["pending_repair"]
@@ -137,20 +124,6 @@ def get_vehicle_status(row): #repair status logic per vehicle
 
 
      
-# =====================================
-# Parts Logic
-# =====================================
-
-#def get_parts_eta_status(row):
-#    body_num = row["body_no"]
-#    query = f"""
-#    select max(eta) from parts_history
-#    where body_no = body_num
-#    
-#"""
-#    return pd.read_sql(query, conn, params=body_list)
-
-
 # =====================================
 # Summary Logic
 # =====================================
@@ -183,11 +156,36 @@ def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect
         axis=1
     )
 
- #   vehicle_summary["parts_eta_status"] = vehicle_summary.apply(
- #       get_parts_eta_status,
- #       axis=1
- #       )
-
     return vehicle_summary 
 
-     
+
+
+# =====================================
+# Previous Status Logic
+# =====================================
+
+
+def previous_status(conn, row):
+    body_no = row["body_no"]
+    query = f"""
+        WITH ranked AS (
+            SELECT
+                body_no,
+                vehicle_status,
+                ROW_NUMBER () OVER (
+                    ORDER BY last_updated DESC 
+                ) AS rn
+                FROM dashboard_summary
+                where body_no = ?
+                )
+            
+            SELECT * from ranked where rn = 2 
+            
+        """
+    
+    df = pd.read_sql(query, conn, params=[body_no])
+    if df.empty:
+        return None
+    return df.iloc[0]["vehicle_status"]
+
+# sample logic: all_vehicle_summary["last_status"] = all_vehicle_summary.apply(previous_status(conn, row))

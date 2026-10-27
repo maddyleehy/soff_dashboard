@@ -154,7 +154,7 @@ def load_bucket_csv_to_db(csv_file_path):
     
     # Bucket logic
      #new column named bucket = obtain loc_cd from get_bucket function
-    df["last_updated"] = datetime.now() #new column name last_updated = current time 
+    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") #new column name last_updated = current time 
     
     # Rename columns to match database
     df.rename(columns={"BODY_NO": "body_no", "BUCKET": "bucket", "SUB_BUCKET": "sub_bucket", "STATUS": "status"}, inplace=True)
@@ -165,7 +165,7 @@ def load_bucket_csv_to_db(csv_file_path):
     code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
     df["sub_bucket_nm"] = df["sub_bucket"].map(code_dict)
     df["status_nm"] = df["status"].map(code_dict)
-    df["last_updated"] = datetime.now()
+    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     df.to_sql(
         "bucket_history",
@@ -238,7 +238,7 @@ def load_defect_csv_to_db(csv_file_path):
     df["dtl_part_nm"] = df["dtl_part_cd"].map(code_dict)
     df["stn_grp_nm"] = df["stn_grp_cd"].map(code_dict)
     df["stn_nm"] = df["stn_cd"].map(code_dict)
-    df["last_updated"] = datetime.now()
+    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df.to_sql(
         "defect_history",
         conn,
@@ -267,7 +267,10 @@ def load_parts_csv_to_db(csv_file_path):
         "text"
         ]
     df = df[keep_cols]
-   
+    df["eta"] = pd.to_datetime(
+        df["eta"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df.columns = [col.lower() for col in df.columns]
     df.to_sql(
         "parts_history",
@@ -290,7 +293,7 @@ def load_dashboard_summary_to_db(summary_df):
     summary_df.to_sql(
         "dashboard_summary",
         conn,
-        if_exists = "replace",
+        if_exists = "append",
         index=False
     )
     conn.commit()

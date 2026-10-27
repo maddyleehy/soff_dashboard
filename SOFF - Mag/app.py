@@ -8,7 +8,7 @@ from db import (
     load_parts_csv_to_db, 
     load_dashboard_summary_to_db, 
     init_db,)
-from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary, previous_status)
+from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary, previous_status, get_previous_status)
 
 #Load once helper function
 
@@ -217,7 +217,7 @@ st.subheader("Latest Dashboard Summary")
 
 latest_dashboard = all_vehicle_summary.copy()
 latest_dashboard = latest_dashboard.drop(columns=["sub_bucket", "status"]) 
-latest_dashboard["last_status"] = latest_dashboard.apply(previous_status, conn = conn)
+latest_dashboard["last_status"] = latest_dashboard.apply(lambda row: get_previous_status(conn, row), axis=1)
 
 st.dataframe(
     latest_dashboard,

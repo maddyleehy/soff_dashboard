@@ -7,8 +7,9 @@ from db import (
     load_defect_csv_to_db, 
     load_parts_csv_to_db, 
     load_dashboard_summary_to_db, 
-    init_db,)
-from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, build_vehicle_summary, previous_status, get_previous_status)
+    init_db,load_te1_master_to_db)
+from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
+                   build_vehicle_summary, previous_status, get_previous_status)
 
 #Load once helper function
 
@@ -50,7 +51,17 @@ def get_db_connection():
     )
 
 conn = get_db_connection()
-
+#st.write(
+#    pd.read_sql(
+#        """
+#        SELECT name
+#        FROM sqlite_master
+#        WHERE type='table'
+#        ORDER BY name
+#        """,
+#        conn
+#    )
+#)
 
 # =====================================
 # CSV uploading
@@ -70,6 +81,14 @@ load_once(defect_file, "defect", load_defect_csv_to_db, "Defect")
 st.subheader("Parts ETA Upload")
 parts_file = st.file_uploader("Upload Parts CSV", type=["csv"], key="parts")
 load_once(parts_file, "parts", load_parts_csv_to_db, "Parts")
+
+#TE1_Master
+st.subheader("TE1 Master Upload")
+te1_file = st.file_uploader("Upload TE1 Master CSV",
+    type=["csv"],
+    key="te1")
+load_once(te1_file, "te1", load_te1_master_to_db, "TE1 Master")
+
 
 # ===========================================
 # Historical count for bucket, defect, parts

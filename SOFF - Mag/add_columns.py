@@ -2,17 +2,16 @@
 # =====================================
 # ADDING NEW COLUMNS
 # =====================================
-#
-#import sqlite3
-#
-#conn = sqlite3.connect("vehicle_history.db")
-#conn.execute("ALTER TABLE defect_history ADD COLUMN inspector_nm TEXT")
-#conn.execute("ALTER TABLE defect_history ADD COLUMN repairer_nm TEXT")
-#conn.execute("ALTER TABLE defect_history ADD COLUMN confirmer_nm TEXT")
-#conn.commit()
-#conn.close()
-#print("Columns added")
-#
+
+import sqlite3
+
+conn = sqlite3.connect("vehicle_history.db")
+conn.execute("ALTER TABLE bucket_history ADD COLUMN te1_dt DATETIME")
+conn.commit()
+conn.close()
+print("Columns added")
+
+
 # =====================================
 # BACKFILL
 # =====================================
@@ -39,87 +38,87 @@
 # =====================================
 # initial script given
 # =====================================
-from datetime import datetime, timezone
-import pandas as pd
-import sqlite3
-
-DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-DATE_FORMAT = "%Y-%m-%d"
-
-def to_db_datetime(value, date_only=False):
-    """
-    Convert a raw value to 'YYYY-MM-DD HH:MM:SS' (or 'YYYY-MM-DD' if date_only).
-    Supports:
-      - 14 digits  -> YYYYMMDDhhmmss   (e.g. 20261005142201)
-      - 13 digits  -> epoch milliseconds, UTC (e.g. 1791880000000)
-      - 8 digits   -> YYYYMMDD         (e.g. 20261005)
-      - Text dates -> parsed by pandas (e.g. 2026-10-05 14:22:01)
-    Returns None for blanks or unparseable values.
-    """
-    if pd.isna(value):
-        return None
-
-    s = str(value).strip()
-    if s.endswith(".0"):            # Excel/float artifact: 20261005142201.0
-        s = s[:-2]
-    if s == "" or s.lower() in ("null", "nan", "none"):
-        return None
-
-    try:
-        if s.isdigit():
-            if len(s) == 14:
-                dt = datetime.strptime(s, "%Y%m%d%H%M%S")
-            elif len(s) == 13:
-                dt = datetime.fromtimestamp(int(s) / 1000, tz=timezone.utc).replace(tzinfo=None)
-            elif len(s) == 8:
-                dt = datetime.strptime(s, "%Y%m%d")
-            else:
-                return None
-        else:
-            parsed = pd.to_datetime(s, errors="coerce")
-            if pd.isna(parsed):
-                return None
-            dt = parsed.to_pydatetime()
-    except ValueError:
-        return None
-
-    return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
-
-DB_PATH = "vehicle_history.db"
-TABLE = "defect_history"
-
-DATETIME_COLS = [
-    "fault_input_dt", "repair_dt", "repair_start_dt", "repair_end_dt",
-    "confirm_dt", "main_inspec_dt", "reg_dt", "chg_dt",
-]
-DATE_COLS = ["fault_input_date", "main_inspec_date"]
-
-conn = sqlite3.connect(DB_PATH)
-
-# 1. Confirm the columns exist before changing anything
-existing = {row[1] for row in conn.execute(f"PRAGMA table_info({TABLE})")}
-missing = [c for c in DATETIME_COLS + DATE_COLS if c not in existing]
-if missing:
-    raise SystemExit(f"Columns not found in {TABLE}: {missing}")
-
-# 2. Read the table (values stay as stored; to_db_datetime handles the formats)
-df = pd.read_sql(f"SELECT id, {', '.join(DATETIME_COLS + DATE_COLS)} FROM {TABLE}", conn)
-
-# 3. Convert
-for col in DATETIME_COLS:
-    df[col] = df[col].map(to_db_datetime)
-for col in DATE_COLS:
-    df[col] = df[col].map(lambda v: to_db_datetime(v, date_only=True))
-
-# 4. Write back, matched by primary key
-cols = DATETIME_COLS + DATE_COLS
-set_clause = ", ".join(f"{c} = ?" for c in cols)
-params = [tuple(row[c] for c in cols) + (row["id"],) for _, row in df.iterrows()]
-
-conn.executemany(f"UPDATE {TABLE} SET {set_clause} WHERE id = ?", params)
-conn.commit()
-print(f"Updated {len(df)} rows")
-conn.close()
-
+#from datetime import datetime, timezone
+#import pandas as pd
+#import sqlite3
+#
+#DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+#DATE_FORMAT = "%Y-%m-%d"
+#
+#def to_db_datetime(value, date_only=False):
+#    """
+#    Convert a raw value to 'YYYY-MM-DD HH:MM:SS' (or 'YYYY-MM-DD' if date_only).
+#    Supports:
+#      - 14 digits  -> YYYYMMDDhhmmss   (e.g. 20261005142201)
+#      - 13 digits  -> epoch milliseconds, UTC (e.g. 1791880000000)
+#      - 8 digits   -> YYYYMMDD         (e.g. 20261005)
+#      - Text dates -> parsed by pandas (e.g. 2026-10-05 14:22:01)
+#    Returns None for blanks or unparseable values.
+#    """
+#    if pd.isna(value):
+#        return None
+#
+#    s = str(value).strip()
+#    if s.endswith(".0"):            # Excel/float artifact: 20261005142201.0
+#        s = s[:-2]
+#    if s == "" or s.lower() in ("null", "nan", "none"):
+#        return None
+#
+#    try:
+#        if s.isdigit():
+#            if len(s) == 14:
+#                dt = datetime.strptime(s, "%Y%m%d%H%M%S")
+#            elif len(s) == 13:
+#                dt = datetime.fromtimestamp(int(s) / 1000, tz=timezone.utc).replace(tzinfo=None)
+#            elif len(s) == 8:
+#                dt = datetime.strptime(s, "%Y%m%d")
+#            else:
+#                return None
+#        else:
+#            parsed = pd.to_datetime(s, errors="coerce")
+#            if pd.isna(parsed):
+#                return None
+#            dt = parsed.to_pydatetime()
+#    except ValueError:
+#        return None
+#
+#    return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
+#
+#DB_PATH = "vehicle_history.db"
+#TABLE = "defect_history"
+#
+#DATETIME_COLS = [
+#    "fault_input_dt", "repair_dt", "repair_start_dt", "repair_end_dt",
+#    "confirm_dt", "main_inspec_dt", "reg_dt", "chg_dt",
+#]
+#DATE_COLS = ["fault_input_date", "main_inspec_date"]
+#
+#conn = sqlite3.connect(DB_PATH)
+#
+## 1. Confirm the columns exist before changing anything
+#existing = {row[1] for row in conn.execute(f"PRAGMA table_info({TABLE})")}
+#missing = [c for c in DATETIME_COLS + DATE_COLS if c not in existing]
+#if missing:
+#    raise SystemExit(f"Columns not found in {TABLE}: {missing}")
+#
+## 2. Read the table (values stay as stored; to_db_datetime handles the formats)
+#df = pd.read_sql(f"SELECT id, {', '.join(DATETIME_COLS + DATE_COLS)} FROM {TABLE}", conn)
+#
+## 3. Convert
+#for col in DATETIME_COLS:
+#    df[col] = df[col].map(to_db_datetime)
+#for col in DATE_COLS:
+#    df[col] = df[col].map(lambda v: to_db_datetime(v, date_only=True))
+#
+## 4. Write back, matched by primary key
+#cols = DATETIME_COLS + DATE_COLS
+#set_clause = ", ".join(f"{c} = ?" for c in cols)
+#params = [tuple(row[c] for c in cols) + (row["id"],) for _, row in df.iterrows()]
+#
+#conn.executemany(f"UPDATE {TABLE} SET {set_clause} WHERE id = ?", params)
+#conn.commit()
+#print(f"Updated {len(df)} rows")
+#conn.close()
+#
 
 #python add_columns.py

@@ -121,6 +121,15 @@ def init_db():
     """
     )
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS master_te1(
+    body_no TEXT PRIMARY KEY,
+    te1_dt DATETIME,
+    seq_no INTEGER
+    )
+    """
+    )
+
     conn.commit()
 
 # =====================================
@@ -310,6 +319,57 @@ def load_parts_csv_to_db(csv_file_path):
 
     conn.commit()
 
+    return len(df)
+
+# =====================================
+# Load TE1 Master File to DB
+# =====================================
+def load_te1_master_to_db(csv_file_path):
+    df = pd.read_csv(csv_file_path)
+    df.columns = df.columns.str.strip()
+    df.rename(
+        columns={
+            "BODY_NO": "body_no",
+            "TE1_IN": "te1_dt"
+        },
+        inplace=True
+    )
+    df["te1_dt"] = df["te1_dt"].map(to_db_datetime)
+    # Existing VINs
+    existing_df = pd.read_sql(
+        "SELECT body_no FROM master_te1",
+        conn
+    )
+    # Remove VINs already loaded
+    df = df[
+        ~df["body_no"].isin(existing_df["body_no"])
+    ]
+    if df.empty:
+        return 0
+    # Sort oldest to newest
+    df = df.sort_values("te1_dt")
+    # Get current max sequence
+    max_seq = pd.read_sql(
+        """
+        SELECT COALESCE(MAX(seq_no), 0) AS max_seq
+        FROM master_te1
+        """,
+        conn
+    ).iloc[0]["max_seq"]
+    # Continue numbering
+    df["seq_no"] = range(
+        max_seq + 1,
+        max_seq + 1 + len(df)
+    )
+    df = df[["body_no", "te1_dt", "seq_no"]]
+    df.to_sql(
+        "master_te1",
+        conn,
+        if_exists="append",
+        index=False
+    )
+
+    conn.commit()
     return len(df)
 
 # =====================================

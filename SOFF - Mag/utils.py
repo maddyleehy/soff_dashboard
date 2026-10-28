@@ -2,6 +2,23 @@ import pandas as pd
 from datetime import datetime, timezone
 
 # =====================================
+# TE1 Sorting Logic
+# =====================================
+def sort_by_te1(df, conn):
+    master_te1 = df.read_sql(
+        """
+    SELECT body_no, seq_no
+    FROM master_te1
+    """,
+    conn
+    )
+    df = df.merge(master_te1, on="body_no", how="left")
+    df = df.sort_values(["last_updated", "seq_no"], ascending=[True, True])
+    df = df.drop(columns=["seq_no"])
+    return df
+
+
+# =====================================
 # Bucket Logic
 # =====================================
 

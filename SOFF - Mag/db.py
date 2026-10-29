@@ -1,7 +1,7 @@
 import pandas as pd
 import sqlite3
 from datetime import datetime
-from utils import to_db_datetime
+from utils import to_db_datetime, sort_by_te1
 
 # =====================================
 # INITIALIZE DATABASE TABLE
@@ -180,6 +180,7 @@ def load_bucket_csv_to_db(csv_file_path):
     df["status_nm"] = df["status"].map(code_dict)
     df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
+    df = sort_by_te1(df, conn)
     df.to_sql(
         "bucket_history",
         conn,
@@ -272,7 +273,8 @@ def load_defect_csv_to_db(csv_file_path):
     df["inspector_nm"] = df["inspector_id"].map(employee_dict)
     df["repairer_nm"] = df["repairer_id"].map(employee_dict)
     df["confirmer_nm"] = df["confirmer_id"].map(employee_dict)
-   
+    
+    df = sort_by_te1(df, conn)
     df.to_sql(
         "defect_history",
         conn,
@@ -310,6 +312,8 @@ def load_parts_csv_to_db(csv_file_path):
         ).dt.strftime("%Y-%m-%d")
     df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df.columns = [col.lower() for col in df.columns]
+    
+    df = sort_by_te1(df, conn)
     df.to_sql(
         "parts_history",
         conn,
@@ -355,9 +359,10 @@ def load_te1_master_to_db(csv_file_path):
         FROM master_te1
         """,
         conn
+        
     ).iloc[0]["max_seq"]
     # Continue numbering
-    df["seq_no"] = range(
+    df["seq_no"] = range( 
         max_seq + 1,
         max_seq + 1 + len(df)
     )
@@ -368,7 +373,6 @@ def load_te1_master_to_db(csv_file_path):
         if_exists="append",
         index=False
     )
-
     conn.commit()
     return len(df)
 

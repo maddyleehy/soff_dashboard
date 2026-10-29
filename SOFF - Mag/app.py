@@ -51,17 +51,17 @@ def get_db_connection():
     )
 
 conn = get_db_connection()
-#st.write(
-#    pd.read_sql(
-#        """
-#        SELECT name
-#        FROM sqlite_master
-#        WHERE type='table'
-#        ORDER BY name
-#        """,
-#        conn
-#    )
-#)
+st.write(
+    pd.read_sql(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type='table'
+        ORDER BY name
+        """,
+        conn
+    )
+)
 
 # =====================================
 # CSV uploading

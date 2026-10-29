@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 # TE1 Sorting Logic
 # =====================================
 def sort_by_te1(df, conn):
-    master_te1 = df.read_sql(
+    master_te1 = pd.read_sql(
         """
     SELECT body_no, seq_no
     FROM master_te1

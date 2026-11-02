@@ -140,8 +140,43 @@ def get_vehicle_status(row): #repair status logic per vehicle
     else:
         return "Unknown"
 
+def is_blank(value):
+    return pd.isna(value) or str(value).strip() == ""
 
-     
+def get_defect_status(row): #repair status logic per defect
+
+    fault_cd =  row["fault_cd"]
+    repair_yn =  row["repair_yn"]
+    repairer_id =  row["repairer_id"]
+    repair_start_dt = row["repair_start_dt"]
+    repair_end_dt = row["repair_end_dt"]
+    confirm_yn = row["confirm_yn"]
+    #confirm_dt = row["confirm_dt"]
+    #confirmer_id =  row["confirmer_id"]
+
+    if repairer_id == "A999999" and fault_cd == "F00137":
+        return "Online Repairer - Record"
+
+    elif repairer_id == "A999999" and fault_cd != "F00137":
+        return "Online Repairer - Inline"
+    
+    elif repair_yn == "N" and is_blank(repair_start_dt) and is_blank(repair_end_dt):
+        return "Pending Repair"
+
+    elif repair_yn == "N" and not is_blank(repair_start_dt) and is_blank(repair_end_dt):
+        return "Repair In Progress"
+
+    elif repair_yn == "Y" and confirm_yn == "N":
+        return "Repair Completed, Pending QC Confirm"
+
+    elif repair_yn == "Y" and confirm_yn == "Y":
+        return "QC Accepted"
+
+    else:
+        return "Unknow"
+
+
+    
 # =====================================
 # Summary Logic
 # =====================================

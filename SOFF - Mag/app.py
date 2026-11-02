@@ -232,6 +232,35 @@ vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bu
 # Latest Dashboard Summary UI
 # ===========================================
 
+
+#Default column
+default_column_order = [
+    "id",
+    "body_no",
+    "last_updated",
+    "bucket",
+    "vehicle_status",
+    "last_status",
+    "part_no",
+    "part_name",
+    "eta",
+    "status",
+    "fault_input_date",
+    "repair_yn",
+    "repairer_id",
+    "repair_start_dt",
+    "repair_end_dt",
+    "confirm_yn",
+    "confirmer_id",
+    "confirm_dt",
+]
+
+def ordered_columns (df, preferred = default_column_order):
+    first = [c for c in preferred if c in df.columns]
+    rest = [c for c in df.columns if c not in first]
+    return first + rest
+
+
 st.subheader("Latest Dashboard Summary")
 
 latest_dashboard = all_vehicle_summary.copy()
@@ -240,6 +269,7 @@ latest_dashboard["last_status"] = latest_dashboard.apply(lambda row: get_previou
 
 st.dataframe(
     latest_dashboard,
+    column_order = ordered_columns(latest_dashboard),
     width="stretch",
     hide_index=True
 )
@@ -262,37 +292,60 @@ if search_body:
         .str.contains(search_body, case=False, na=False)
     ]
 
+    search_result = search_result.drop(columns=["sub_bucket", "status"])
+
     st.dataframe(
         search_result,
+        column_order = ordered_columns (search_result),
         width="stretch",
         hide_index=True
     )
 
+    # ===========================================
+    # Parts table
+    # ===========================================
     pending_parts = pd.read_sql(
-        "SELECT * FROM parts_history WHERE body_no = ? and last_updated = (SELECT MAX(last_updated) from parts_history where body_no = ?)",
+        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
         conn,
         params = [search_body, search_body]
     )
 
-    st.subheader (f"Parts for {search_body}")
+    pending_parts = pending_parts.drop(columns=["id","text"], errors = "ignore")
+
+    #script to return pending parts and parts supplied number
+    parts_status = pending_parts["status"].astype(str).str.strip().str.lower()
+    pending_count = int((parts_status == "open").sum())
+    supplied_count = int(parts_status.isin(["confirmed", "resolved"]).sum())
+
+    st.subheader (f"Parts for {search_body.upper()} ({len(pending_parts)})")
+    st.write(f"**Pending parts:** {pending_count}")
+    st.write(f"**Parts supplied:** {supplied_count}")
+
     st.dataframe(
         pending_parts,
+        column_order = ordered_columns(pending_parts),
         width = "stretch",
         hide_index = True
     )
 
+    # ===========================================
+    # Defects table
+    # ===========================================
+    
     defect_history = pd.read_sql(
         """
         SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
         FROM defect_history 
-        WHERE body_no = ? and last_updated = (SELECT MAX (last_updated) from defect_history where body_no = ?)""",
+        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))""",
         conn,
         params = [search_body, search_body]
     )
 
-    st.subheader (f"Defect for {search_body}")
+   
+    st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
     st.dataframe(
         defect_history,
+        column_order = ordered_columns(defect_history),
         width = "stretch",
         hide_index = True
         )

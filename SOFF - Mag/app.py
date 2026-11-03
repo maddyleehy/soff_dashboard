@@ -279,7 +279,6 @@ st.dataframe(
 # Search Vehicle
 # ===========================================
 
-
 st.subheader("Search Vehicle") 
 search_body = st.text_input(
     "Enter Body No",
@@ -351,7 +350,6 @@ if search_body:
         )
 
 
-
 # ===========================================
 # Bucket History Table UI
 # ===========================================
@@ -394,3 +392,4 @@ if search_body:
 #
 #cursor = conn.cursor()
 #
+

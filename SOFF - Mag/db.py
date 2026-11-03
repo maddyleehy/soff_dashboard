@@ -1,7 +1,7 @@
 import pandas as pd
 import sqlite3
 from datetime import datetime
-from utils import to_db_datetime, sort_by_te1
+from utils import to_db_datetime, sort_by_te1, get_defect_status, get_defect_summary
 
 # =====================================
 # INITIALIZE DATABASE TABLE
@@ -83,6 +83,7 @@ def init_db():
                 reg_dt TEXT,
                 chg_id TEXT,
                 chg_dt TEXT,
+                defect_status TEXT,
                 last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -262,6 +263,9 @@ def load_defect_csv_to_db(csv_file_path):
     df["stn_grp_nm"] = df["stn_grp_cd"].map(code_dict)
     df["stn_nm"] = df["stn_cd"].map(code_dict)
     df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#    df["defect_status"] = get_defect_status(master_df)
+    df["defect_status"] = df.apply(get_defect_status, axis=1)
+
 
     # Map employee id to name
     emp_df = pd.read_csv("data/employee_master_list.csv", dtype=str)
@@ -285,9 +289,6 @@ def load_defect_csv_to_db(csv_file_path):
     conn.commit()
 
     return len(df)
-
-
-
 
 
 

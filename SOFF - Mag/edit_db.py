@@ -68,6 +68,37 @@
 # =====================================
 # Remove DB
 # =====================================
-import os
-os.remove("vehicle_history.db")
-print("Deleted vehicle_history.db")
+#import os
+#os.remove("vehicle_history.db")
+#print("Deleted vehicle_history.db")
+
+# =====================================
+# Run this after removing DB
+# =====================================
+import sqlite3
+TABLES_TO_DROP = [
+   # "dashboard_summary",
+    #"bucket_history",
+    "defect_history",
+   # "parts_history",
+
+]
+
+conn = sqlite3.connect("vehicle_history.db")
+for table in TABLES_TO_DROP:
+    conn.execute(f"DROP TABLE IF EXISTS {table}")
+    print ("dropped", table)
+
+#conn.execute("DROP TABLE IF EXISTS bucket_history")
+conn.commit()
+conn.close()
+# =====================================
+# Troubleshooting
+# =====================================
+
+#import sqlite3
+#conn = sqlite3.connect("vehicle_history.db")
+#print(conn.execute(
+#    "SELECT sql FROM sqlite_master WHERE name = 'bucket_history'"
+#).fetchone()[0])
+#conn.close()

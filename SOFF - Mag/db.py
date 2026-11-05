@@ -2,6 +2,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 from utils import to_db_datetime, sort_by_te1, get_defect_status, get_defect_summary
+from pathlib import Path
 
 # =====================================
 # INITIALIZE DATABASE TABLE
@@ -15,28 +16,81 @@ def get_db_connection():
 
 conn = get_db_connection()
 
+
 def init_db():
     """Create tables if they don't exist"""
-
     cursor = conn.cursor()
-
-#create tables with header name and respective data type
-    #Bucket db table
-    cursor.execute(""" 
-        CREATE TABLE IF NOT EXISTS bucket_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            body_no TEXT NOT NULL,
-            bucket TEXT,
-            sub_bucket TEXT,
-            sub_bucket_nm TEXT,
-            status TEXT,
-            status_nm TEXT,
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(body_no, bucket, sub_bucket, status)
+    
+    #Dashboard_summary table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS dashboard_summary (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body_no TEXT,
+        bucket TEXT,
+        sub_bucket TEXT,
+        sub_bucket_nm TEXT,
+        status TEXT,
+        status_nm TEXT,
+        defect_count INTEGER,
+        pending_repair INTEGER,
+        repair_in_progress INTEGER,
+        pending_quality INTEGER,
+        quality_accepted INTEGER,
+        vehicle_status TEXT,
+        last_updated DATETIME
         )
     """)
 
-    #Defect db table
+    ## Old Create DB Table for Dashboard Summary
+    #cursor.execute("""
+    #CREATE TABLE IF NOT EXISTS dashboard_summary(
+    #    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #    body_no TEXT,
+    #    bucket TEXT,
+    #    sub_bucket TEXT,
+    #    status TEXT,
+    #    defect_count INTEGER,
+    #    repair_started INTEGER,
+    #    repair_completed INTEGER,
+    #    quality_accepted INTEGER,
+    #    vehicle_status TEXT,
+    #    snapshot_dt DATETIME
+    #)
+    #"""
+    #)
+
+    #Bucket_history table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bucket_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        body_no TEXT NOT NULL,
+        bucket TEXT,
+        sub_bucket TEXT,
+        sub_bucket_nm TEXT,
+        status TEXT,
+        status_nm TEXT,
+        last_updated DATETIME,
+        UNIQUE(body_no, bucket, sub_bucket, status, last_updated)
+        )
+    """)
+
+
+    #Old Bucket_history table
+    #cursor.execute(""" 
+    #    CREATE TABLE IF NOT EXISTS bucket_history (
+    #        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #        body_no TEXT NOT NULL,
+    #        bucket TEXT,
+    #        sub_bucket TEXT,
+    #        sub_bucket_nm TEXT,
+    #        status TEXT,
+    #        status_nm TEXT,
+    #        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+    #        UNIQUE(body_no, bucket, sub_bucket, status)
+    #    )
+    #""")
+#
+    #Defect_history table
     cursor.execute("""
             CREATE TABLE IF NOT EXISTS defect_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +142,7 @@ def init_db():
             )
         """)
 
-    #Parts ETA db table
+    #Parts_history db table
     cursor.execute(""" 
         CREATE TABLE IF NOT EXISTS parts_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,25 +156,7 @@ def init_db():
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
             )
     """)
-    
-    # Create DB Table for Dashboard Summary
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS dashboard_summary(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        body_no TEXT,
-        bucket TEXT,
-        sub_bucket TEXT,
-        status TEXT,
-        defect_count INTEGER,
-        repair_started INTEGER,
-        repair_completed INTEGER,
-        quality_accepted INTEGER,
-        vehicle_status TEXT,
-        snapshot_dt DATETIME
-    )
 
-    """
-    )
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS master_te1(
@@ -152,6 +188,16 @@ def normalize_datetime(value):
         return datetime.strptime(s, "%Y%m%d").strftime("%Y-%m-%d")
     return None                           # unknown format: store NULL and inspect
 
+
+
+# =====================================
+# EXTRACT FILE DT FROM TWX DOWNLOAD
+# =====================================
+def get_file_suffix(file_path, length = 13):
+    """Return the last 'length' characters of the file name, excluding .csv.
+    Accepts a pthe string, a Pth, or a streamlit uploaded file. """
+    name = getattr(file_path, "name", file_path) # UploadedFile/Path -> .name, str stays as-is
+    return Path(name).stem[-length:]
 
 # =====================================
 # LOAD AND APPEND CSV DATA (Bucket)
@@ -256,6 +302,7 @@ def load_defect_csv_to_db(csv_file_path):
     code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
 
     cols = ["body_no", "sub_proc_cd", "inspec_part_cd", "fault_cd", "dtl_part_cd", "stn_cd", "fault_input_dt"]
+
     df["unique_id"] = df[cols].fillna("").astype(str).agg("_".join, axis=1)
     df["inspec_part_nm"] = df["inspec_part_cd"].map(code_dict)
     df["fault_nm"] = df["fault_cd"].map(code_dict)
@@ -263,8 +310,9 @@ def load_defect_csv_to_db(csv_file_path):
     df["stn_grp_nm"] = df["stn_grp_cd"].map(code_dict)
     df["stn_nm"] = df["stn_cd"].map(code_dict)
     df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#    df["defect_status"] = get_defect_status(master_df)
+#   df["defect_status"] = get_defect_status(master_df)
     df["defect_status"] = df.apply(get_defect_status, axis=1)
+    df["file_name"] = get_file_suffix(csv_file_path)
 
 
     # Map employee id to name

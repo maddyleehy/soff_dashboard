@@ -95,43 +95,43 @@ load_once(te1_file, "te1", load_te1_master_to_db, "TE1 Master")
 # Historical count for bucket, defect, parts
 # ===========================================
 
-bucket_count = pd.read_sql(
-    """
-    SELECT COUNT(*) AS cnt
-    FROM bucket_history
-    """,
-    conn
-)
-defect_count = pd.read_sql(
-    """
-    SELECT COUNT(*) AS cnt
-    FROM defect_history
-    """,
-    conn
-)
-parts_count = pd.read_sql(
-    "SELECT COUNT(*) AS cnt " \
-    "FROM parts_history", 
-    conn)
-
-st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(
-        "Bucket Records",
-        int(bucket_count.iloc[0]["cnt"])
-    )
-with col2:
-    st.metric(
-        "Defect Records",
-        int(defect_count.iloc[0]["cnt"])
-    )
-with col3:
-    st.metric(
-        "Parts Records",
-        int(parts_count.iloc[0]["cnt"])
-    )   
+#bucket_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM bucket_history
+#    """,
+#    conn
+#)
+#defect_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM defect_history
+#    """,
+#    conn
+#)
+#parts_count = pd.read_sql(
+#    "SELECT COUNT(*) AS cnt " \
+#    "FROM parts_history", 
+#    conn)
+#
+#st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
+#
+#col1, col2, col3 = st.columns(3)
+#with col1:
+#    st.metric(
+#        "Bucket Records",
+#        int(bucket_count.iloc[0]["cnt"])
+#    )
+#with col2:
+#    st.metric(
+#        "Defect Records",
+#        int(defect_count.iloc[0]["cnt"])
+#    )
+#with col3:
+#    st.metric(
+#        "Parts Records",
+#        int(parts_count.iloc[0]["cnt"])
+#    )   
 
 # ===========================================
 # ===========================================
@@ -233,12 +233,53 @@ vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bu
 # ===========================================
 
 changes = get_status_changes (conn)
+change_qty = changes[changes["change"] == "Changed"]
+change_summary = (
+    change_qty.groupby("body_no")
+    .size()
+    .reset_index(name = "change_count")
+    .sort_values("change_count", ascending = False)
+)
+
+
+st.subheader("Body Numbers with Status Changes")
+
+if change_summary.empty:
+    st.info ("No status changes between the latest and previous load.")
+else:
+    st.dataframe(
+        change_summary, 
+        width = "stretch", 
+        hide_index = True)
+
+
+#st.subheader("Search Vehicle") 
+#
+#search_body = st.text_input(
+#    "Enter Body No",
+#    placeholder="e.g. ABC123"
+#)
+
 
 st.subheader("Defect Status Changes (Latest vs Previous Load)")
-st.write(changes["change"].value_counts())
 
+changes_view = changes.loc[
+    #~changes["change"].isin(["Unchanged", "New"]),
+    #(changes["change"] != "Unchanged") | (changes["current_defect_status"] == "Online Repairer - Record"),
+    changes["change"] != "Unchanged",
+    ["change",
+     "file_name",
+     "body_no",
+     "fault_input_date",
+     "stn_grp_nm",
+     "inspec_part_nm",
+     "current_defect_status",
+     "prev_defect_status",
+     "unique_id"
+     ],
+]
 st.dataframe(
-    changes[changes["change"] != "Unchanged"],
+    changes_view,    
     width="stretch",
     hide_index=True,
 )

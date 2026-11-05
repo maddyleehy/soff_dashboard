@@ -269,7 +269,14 @@ def get_status_changes(conn):
     current = (
         df[df["last_updated"] == latest_ts]
         .drop_duplicates("unique_id", keep = "last")
-        [["unique_id","body_no", "defect_status"]]
+        [["file_name",          
+          "body_no", 
+          "fault_input_date",
+          "stn_grp_nm", 
+          "inspec_part_nm", 
+          "defect_status",
+          "unique_id"
+          ]]
         .copy()
     )
 
@@ -280,15 +287,19 @@ def get_status_changes(conn):
             df[df["last_updated"] == prev_ts]
             .drop_duplicates("unique_id", keep = "last")
             [["unique_id", "defect_status"]]
-            .rename(columns = {"defect_status":"prev_status"})
+            .rename(columns = {"defect_status":"prev_defect_status"})
+            
         )
         current = current.merge(previous, on="unique_id", how = "left")
 
     current ["change"] = current.apply(
-        lambda r:"New" if pd.isna(r["prev_status"])
-        else ("Unchanged" if r["prev_status"] == r["defect_status"] else "Changed"),
+        lambda r:"New" if pd.isna(r["prev_defect_status"])
+        else ("Unchanged" if r["prev_defect_status"] == r["defect_status"] else "Changed"),
         axis = 1
     )
+
+    current = current.rename(columns = {"defect_status" : "current_defect_status"})
+   
     return current
 
 

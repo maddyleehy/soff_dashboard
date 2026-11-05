@@ -9,7 +9,8 @@ from db import (
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes)
+
 
 #Load once helper function
 
@@ -226,6 +227,21 @@ if st.button("Load Database Snapshot", type="primary"):
 
 # Specific Bucket Defect
 vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bucket]
+
+# ===========================================
+# Changes Table
+# ===========================================
+
+changes = get_status_changes (conn)
+
+st.subheader("Defect Status Changes (Latest vs Previous Load)")
+st.write(changes["change"].value_counts())
+
+st.dataframe(
+    changes[changes["change"] != "Unchanged"],
+    width="stretch",
+    hide_index=True,
+)
 
 
 # ===========================================

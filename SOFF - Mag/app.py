@@ -287,10 +287,21 @@ search_body = st.text_input(
 )
 
 if search_body:
+    search_key = "".join(search_body.split()).upper()
+
     search_result = all_vehicle_summary[
         all_vehicle_summary["body_no"]
-        .str.contains(search_body, case=False, na=False)
+        .astype(str)
+        .str.replace(r"\s+", "", regex=True)
+        .str.upper()
+        .str.contains(search_key, na=False)
     ]
+    
+    #if search_body:
+    #search_result = all_vehicle_summary[
+    #    all_vehicle_summary["body_no"]
+    #    .str.contains(search_body, case=False, na=False)
+    #]
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
@@ -304,10 +315,19 @@ if search_body:
     # ===========================================
     # Parts table
     # ===========================================
+    #pending_parts = pd.read_sql(
+    #    "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
+    #    conn,
+    #    params = [search_body, search_body]
+    #)
+
+    search_key = "".join(search_body.split()).upper()
+
     pending_parts = pd.read_sql(
-        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
-        conn,
-        params = [search_body, search_body]
+    """ SELECT * FROM parts_history WHERE REPLACE(UPPER(body_no), ' ', '') LIKE ? AND last_updated = (SELECT MAX(last_updated) FROM parts_history WHERE REPLACE(UPPER(body_no), ' ', '') LIKE ?
+      )""",
+    conn,
+    params=[f"%{search_key}%",f"%{search_key}%"]
     )
 
     pending_parts = pending_parts.drop(columns=["id","text"], errors = "ignore")
@@ -332,15 +352,26 @@ if search_body:
     # Defects table
     # ===========================================
     
+    #defect_history = pd.read_sql(
+    #    """
+    #    SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
+    #    FROM defect_history 
+    #    WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))""",
+    #    conn,
+    #    params = [search_body, search_body]
+    #)
+    
+    search_key = "".join(search_body.split()).upper()
+
     defect_history = pd.read_sql(
         """
-        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
-        FROM defect_history 
-        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))""",
-        conn,
-        params = [search_body, search_body]
-    )
-
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt, repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
+        FROM defect_history
+        WHERE REPLACE(UPPER(body_no), ' ', '') LIKE ?
+        AND last_updated = (SELECT MAX(last_updated) FROM defect_history WHERE REPLACE(UPPER(body_no), ' ', '') LIKE ?)""",
+    conn,
+    params=[f"%{search_key}%", f"%{search_key}%"]
+)
    
     st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
     st.dataframe(

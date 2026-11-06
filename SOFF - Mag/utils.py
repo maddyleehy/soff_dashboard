@@ -173,7 +173,7 @@ def get_defect_status(row): #repair status logic per defect
         return "QC Accepted"
 
     else:
-        return "Unknow"
+        return "Unknown"
 
 
     

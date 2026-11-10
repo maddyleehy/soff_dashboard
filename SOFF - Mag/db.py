@@ -1,7 +1,7 @@
 import pandas as pd
 import sqlite3
 from datetime import datetime
-from utils import to_db_datetime, sort_by_te1, get_defect_status, get_defect_summary
+from utils import to_db_datetime, sort_by_te1, get_defect_status, get_status_changes
 from pathlib import Path
 
 # =====================================
@@ -310,8 +310,8 @@ def load_defect_csv_to_db(csv_file_path):
     df["stn_grp_nm"] = df["stn_grp_cd"].map(code_dict)
     df["stn_nm"] = df["stn_cd"].map(code_dict)
     df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#   df["defect_status"] = get_defect_status(master_df)
     df["defect_status"] = df.apply(get_defect_status, axis=1)
+    #df["prev_defect_status"] = df.apply(get_status_changes, axis=1)
     df["file_name"] = get_file_suffix(csv_file_path)
 
 

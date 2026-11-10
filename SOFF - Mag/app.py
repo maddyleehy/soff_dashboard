@@ -243,10 +243,15 @@ summary = (
     .rename_axis(columns=None)
     .reset_index()
     .sort_values("change_count", ascending = False)
-
 )
 
-st.subheader("Body Numbers with Status Changes")
+changes_qty = changes[changes["change"].isin(["Changed"])].groupby(["body_no"])
+new_qty = changes[changes["change"].isin(["New"])].groupby(["body_no"])
+
+st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
+st.write(f"**Body Number with changes:** {len(changes_qty)}")
+st.write(f"**Body Number with new defects:** {len(new_qty)}")
+
 
 if summary.empty: #summary -> change_summary
     st.info ("No status changes between the latest and previous load.")
@@ -271,12 +276,12 @@ changes_view = changes.loc[
      ],
 ]
 
-st.subheader(f"Defect Status Changes ({len(changes_view)})")
-st.dataframe(
-    changes_view,    
-    width="stretch",
-    hide_index=True,
-)
+#st.subheader(f"Defect Status Changes ({len(changes_view)})")
+#st.dataframe(
+#    changes_view,    
+#    width="stretch",
+#    hide_index=True,
+#)
 
 
 # ===========================================
@@ -284,8 +289,10 @@ st.dataframe(
 # ===========================================
 default_column_order = [
     "id",
+    "change",
     "body_no",
-    "last_updated",
+    "current_defect_status",
+    "prev_defect_status",
     "bucket",
     "vehicle_status",
     "last_status",
@@ -302,6 +309,7 @@ default_column_order = [
     "confirm_yn",
     "confirmer_nm",
     "confirm_dt",
+    "last_updated",
 ]
 
 
@@ -363,7 +371,7 @@ if search_body:
         params = [search_body, search_body]
     )
 
-    pending_parts = pending_parts.drop(columns=["id","text"], errors = "ignore")
+    pending_parts = pending_parts.drop(columns=["body_no", "id","text"], errors = "ignore")
 
     #script to return pending parts and parts supplied number
     parts_status = pending_parts["status"].astype(str).str.strip().str.lower()
@@ -387,7 +395,7 @@ if search_body:
     
     defect_history = pd.read_sql(
         """
-        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status, unique_id
         FROM defect_history 
         WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))
         ORDER BY
@@ -396,8 +404,8 @@ if search_body:
         WHEN 'Pending Repair' THEN 1
         WHEN 'Repair Completed, Pending QC Confirm' THEN 2
         WHEN 'QC Accepted' THEN 3
-        WHEN 'Online Repairer - Inline' THEN 5
-        ELSE 3
+        WHEN 'Online Repairer - Inline' THEN 4
+        ELSE 5
         END
 
         """,
@@ -405,21 +413,26 @@ if search_body:
         params = [search_body, search_body]
     )
 
-   #
-
     repair_status = defect_history["defect_status"].astype(str).str.lower()
     pending_repair_count = int((repair_status == "pending repair").sum())
     repair_in_progress_count = int((repair_status == "repair in progress").sum())
     pending_qc_count = int((repair_status == "repair completed, pending qc confirm").sum())
 
+   
     st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
-    st.write(f"**Pending Repair:** {pending_count}")
+    st.write(f"**Pending Repair:** {pending_repair_count}")
     st.write(f"**Repair In Progress:** {repair_in_progress_count}")
     st.write(f"**Repair Completed, Pending QC Confirm:** {pending_qc_count}")
-    
+
+    status_cols = changes[["unique_id", "current_defect_status", "prev_defect_status", "change"]]
+    defect_view = defect_history.merge(status_cols, on ="unique_id", how = "left").drop(columns = ["body_no", "defect_status"])
+    defect_view ["change"] = defect_view ["change"].fillna("No Prior Load")
+
     st.dataframe(
-        defect_history,
-        column_order = ordered_columns(defect_history),
+        #defect_history,
+        #column_order = ordered_columns(defect_history),
+        defect_view, 
+        column_order = ordered_columns(defect_view),
         width = "stretch",
         hide_index = True
         )

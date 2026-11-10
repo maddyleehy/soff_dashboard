@@ -285,12 +285,11 @@ def get_status_changes(conn):
     else:
         previous = (
             df[df["last_updated"] == prev_ts]
-            .drop_duplicates("unique_id", keep = "last")
-            [["unique_id", "defect_status"]]
+            .drop_duplicates("unique_id", keep = "last")[["unique_id", "defect_status"]]
             .rename(columns = {"defect_status":"prev_defect_status"})
             
         )
-        current = current.merge(previous, on="unique_id", how = "left")
+        current = current.merge(previous, on="unique_id", how="left")
 
     current ["change"] = current.apply(
         lambda r:"New" if pd.isna(r["prev_defect_status"])
@@ -301,7 +300,6 @@ def get_status_changes(conn):
     current = current.rename(columns = {"defect_status" : "current_defect_status"})
    
     return current
-
 
 
 # =====================================

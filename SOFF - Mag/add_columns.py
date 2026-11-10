@@ -6,7 +6,7 @@
 #import sqlite3
 #
 #conn = sqlite3.connect("vehicle_history.db")
-#conn.execute("ALTER TABLE defect_history ADD COLUMN defect_status TEXT")
+#conn.execute("ALTER TABLE defect_history ADD COLUMN file_name TEXT")
 #conn.commit()
 #conn.close()
 #print("Columns added")
@@ -22,19 +22,19 @@ import pandas as pd
 
 conn = sqlite3.connect("vehicle_history.db")
 
-master_df = pd.read_csv("data/employee_master_list.csv", dtype=str)
-master_df.columns = master_df.columns.str.strip()
-code_dict = dict(zip(master_df["User/Employee ID"], master_df["First Name"]))
+#master_df = pd.read_csv("data/employee_master_list.csv", dtype=str)
+#master_df.columns = master_df.columns.str.strip()
+#code_dict = dict(zip(master_df["User/Employee ID"], master_df["First Name"]))
 
 rows = conn.execute("SELECT id, inspector_id, repairer_id, confirmer_id FROM defect_history").fetchall()
 
 conn.executemany(
-    "UPDATE defect_history SET inspector_nm = ?, repairer_nm = ?, confirmer_nm  = ? WHERE id = ?",
+    "UPDATE defect_history SET file_name = ? WHERE id = ?",
     [(code_dict.get(insp), code_dict.get(rep), code_dict.get(conf), row_id) for row_id, insp, rep, conf in rows],
 )
 conn.commit()
 conn.close()
-#
+
 # =====================================
 # initial script given
 # =====================================

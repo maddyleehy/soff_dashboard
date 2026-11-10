@@ -9,7 +9,8 @@ from db import (
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes)
+
 
 #Load once helper function
 
@@ -94,43 +95,43 @@ load_once(te1_file, "te1", load_te1_master_to_db, "TE1 Master")
 # Historical count for bucket, defect, parts
 # ===========================================
 
-bucket_count = pd.read_sql(
-    """
-    SELECT COUNT(*) AS cnt
-    FROM bucket_history
-    """,
-    conn
-)
-defect_count = pd.read_sql(
-    """
-    SELECT COUNT(*) AS cnt
-    FROM defect_history
-    """,
-    conn
-)
-parts_count = pd.read_sql(
-    "SELECT COUNT(*) AS cnt " \
-    "FROM parts_history", 
-    conn)
-
-st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(
-        "Bucket Records",
-        int(bucket_count.iloc[0]["cnt"])
-    )
-with col2:
-    st.metric(
-        "Defect Records",
-        int(defect_count.iloc[0]["cnt"])
-    )
-with col3:
-    st.metric(
-        "Parts Records",
-        int(parts_count.iloc[0]["cnt"])
-    )   
+#bucket_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM bucket_history
+#    """,
+#    conn
+#)
+#defect_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM defect_history
+#    """,
+#    conn
+#)
+#parts_count = pd.read_sql(
+#    "SELECT COUNT(*) AS cnt " \
+#    "FROM parts_history", 
+#    conn)
+#
+#st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
+#
+#col1, col2, col3 = st.columns(3)
+#with col1:
+#    st.metric(
+#        "Bucket Records",
+#        int(bucket_count.iloc[0]["cnt"])
+#    )
+#with col2:
+#    st.metric(
+#        "Defect Records",
+#        int(defect_count.iloc[0]["cnt"])
+#    )
+#with col3:
+#    st.metric(
+#        "Parts Records",
+#        int(parts_count.iloc[0]["cnt"])
+#    )   
 
 # ===========================================
 # ===========================================
@@ -227,13 +228,60 @@ if st.button("Load Database Snapshot", type="primary"):
 # Specific Bucket Defect
 vehicle_summary = all_vehicle_summary[all_vehicle_summary["bucket"]==selected_bucket]
 
+# ===========================================
+# Changes Table
+# ===========================================
+
+changes = get_status_changes (conn)
+summary = (
+    changes[changes["change"].isin(["Changed", "New"])]
+    .groupby(["body_no", "change"])
+    .size()
+    .unstack(fill_value = 0)
+    .reindex(columns = ["Changed", "New"], fill_value = 0)
+    .rename(columns={"Changed":"change_count", "New": "new_count"})
+    .rename_axis(columns=None)
+    .reset_index()
+    .sort_values("change_count", ascending = False)
+
+)
+
+st.subheader("Body Numbers with Status Changes")
+
+if summary.empty: #summary -> change_summary
+    st.info ("No status changes between the latest and previous load.")
+else:
+    st.dataframe(
+        #change_summary,
+        summary,
+        width = "stretch", 
+        hide_index = True)
+
+changes_view = changes.loc[
+    (changes["change"] != "Unchanged") & (changes["current_defect_status"] != "Online Repairer - Record"),
+    ["change",
+     "file_name",
+     "body_no",
+     "fault_input_date",
+     "stn_grp_nm",
+     "inspec_part_nm",
+     "current_defect_status",
+     "prev_defect_status",
+     "unique_id"
+     ],
+]
+
+st.subheader(f"Defect Status Changes ({len(changes_view)})")
+st.dataframe(
+    changes_view,    
+    width="stretch",
+    hide_index=True,
+)
+
 
 # ===========================================
-# Latest Dashboard Summary UI
+# Default column order helper
 # ===========================================
-
-
-#Default column
 default_column_order = [
     "id",
     "body_no",
@@ -245,40 +293,45 @@ default_column_order = [
     "part_name",
     "eta",
     "status",
+    "defect_status",
     "fault_input_date",
     "repair_yn",
-    "repairer_id",
+    "repairer_nm",
     "repair_start_dt",
     "repair_end_dt",
     "confirm_yn",
-    "confirmer_id",
+    "confirmer_nm",
     "confirm_dt",
 ]
+
 
 def ordered_columns (df, preferred = default_column_order):
     first = [c for c in preferred if c in df.columns]
     rest = [c for c in df.columns if c not in first]
     return first + rest
 
+# ===========================================
+# Latest Dashboard Summary UI
+# ===========================================
 
-st.subheader("Latest Dashboard Summary")
 
-latest_dashboard = all_vehicle_summary.copy()
-latest_dashboard = latest_dashboard.drop(columns=["sub_bucket", "status"]) 
-latest_dashboard["last_status"] = latest_dashboard.apply(lambda row: get_previous_status(conn, row), axis=1)
+#st.subheader("Latest Dashboard Summary")
 
-st.dataframe(
-    latest_dashboard,
-    column_order = ordered_columns(latest_dashboard),
-    width="stretch",
-    hide_index=True
-)
+#latest_dashboard = all_vehicle_summary.copy()
+#latest_dashboard = latest_dashboard.drop(columns=["sub_bucket", "status"]) 
+#latest_dashboard["last_status"] = latest_dashboard.apply(lambda row: get_previous_status(conn, row), axis=1)
+#
+#st.dataframe(
+#    latest_dashboard,
+#    column_order = ordered_columns(latest_dashboard),
+#    width="stretch",
+#    hide_index=True
+#)
 
 
 # ===========================================
 # Search Vehicle
 # ===========================================
-
 
 st.subheader("Search Vehicle") 
 search_body = st.text_input(
@@ -334,22 +387,42 @@ if search_body:
     
     defect_history = pd.read_sql(
         """
-        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_id, confirm_yn, confirm_dt, confirmer_id, last_updated
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status
         FROM defect_history 
-        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))""",
+        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))
+        ORDER BY
+        CASE defect_status
+        WHEN 'Repair In Progress' THEN 0
+        WHEN 'Pending Repair' THEN 1
+        WHEN 'Repair Completed, Pending QC Confirm' THEN 2
+        WHEN 'QC Accepted' THEN 3
+        WHEN 'Online Repairer - Inline' THEN 5
+        ELSE 3
+        END
+
+        """,
         conn,
         params = [search_body, search_body]
     )
 
-   
+   #
+
+    repair_status = defect_history["defect_status"].astype(str).str.lower()
+    pending_repair_count = int((repair_status == "pending repair").sum())
+    repair_in_progress_count = int((repair_status == "repair in progress").sum())
+    pending_qc_count = int((repair_status == "repair completed, pending qc confirm").sum())
+
     st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
+    st.write(f"**Pending Repair:** {pending_count}")
+    st.write(f"**Repair In Progress:** {repair_in_progress_count}")
+    st.write(f"**Repair Completed, Pending QC Confirm:** {pending_qc_count}")
+    
     st.dataframe(
         defect_history,
         column_order = ordered_columns(defect_history),
         width = "stretch",
         hide_index = True
         )
-
 
 
 # ===========================================
@@ -394,3 +467,4 @@ if search_body:
 #
 #cursor = conn.cursor()
 #
+

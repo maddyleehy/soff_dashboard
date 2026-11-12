@@ -37,7 +37,8 @@ def init_db():
         pending_quality INTEGER,
         quality_accepted INTEGER,
         vehicle_status TEXT,
-        last_updated DATETIME
+        last_updated DATETIME,
+        snapshot_dt DATETIME
         )
     """)
 

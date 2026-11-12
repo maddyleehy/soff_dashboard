@@ -6,7 +6,7 @@
 import sqlite3
 
 conn = sqlite3.connect("vehicle_history.db")
-conn.execute("ALTER TABLE defect_history ADD COLUMN prev_defect_status TEXT")
+conn.execute("ALTER TABLE dashboard_summary ADD COLUMN snapshot_dt DATETIME")
 conn.commit()
 conn.close()
 print("Columns added")

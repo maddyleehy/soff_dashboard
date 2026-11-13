@@ -170,6 +170,14 @@ def init_db():
 
     conn.commit()
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS repair_status(
+    body_no TEXT,
+    major_minor TEXT,
+    remark TEXT
+    )
+    """)
+
 # =====================================
 # CONVERTS EPOCH/INTEGER TO DT FORMAT
 # =====================================

@@ -3,14 +3,24 @@
 # ADDING NEW COLUMNS
 # =====================================
 
+# import sqlite3
+
+# conn = sqlite3.connect("vehicle_history.db")
+# conn.execute("ALTER TABLE repair_status ADD COLUMN last_updated DATETIME")
+# conn.commit()
+# conn.close()
+# print("Columns added")
+
+# =====================================
+# RENAME COLUMNS
+# =====================================
 import sqlite3
 
 conn = sqlite3.connect("vehicle_history.db")
-conn.execute("ALTER TABLE dashboard_summary ADD COLUMN snapshot_dt DATETIME")
+conn.execute("ALTER TABLE repair_status RENAME COLUMN remark TO remarks")
 conn.commit()
 conn.close()
-print("Columns added")
-
+print("Columns renamed")
 
 # =====================================
 # BACKFILL

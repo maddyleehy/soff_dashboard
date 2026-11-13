@@ -437,6 +437,97 @@ if search_body:
         hide_index = True
         )
 
+# ===========================================
+# Repair Status
+# ===========================================
+# ===========================================
+# Latest Repair Status (most recent non-null value per field)
+# ===========================================
+latest_repair = pd.read_sql("""
+    SELECT
+        b.body_no,
+        (
+            SELECT r.major_minor
+            FROM repair_status r
+            WHERE r.body_no = b.body_no
+              AND r.major_minor IS NOT NULL
+              AND LOWER(TRIM(r.major_minor)) NOT IN ('', 'none')
+            ORDER BY r.last_updated DESC, r.rowid DESC
+            LIMIT 1
+        ) AS major_minor,
+        (
+            SELECT r.remarks
+            FROM repair_status r
+            WHERE r.body_no = b.body_no
+              AND r.remarks IS NOT NULL
+              AND LOWER(TRIM(r.remarks)) NOT IN ('', 'none')
+            ORDER BY r.last_updated DESC, r.rowid DESC
+            LIMIT 1
+        ) AS remarks
+    FROM (SELECT DISTINCT body_no FROM repair_status) b
+""", conn)
+
+repair_df = (
+    latest_bucket_df[["body_no"]]
+    .drop_duplicates()
+    .merge(latest_repair, on="body_no", how="left")
+)
+repair_df["major_minor"] = repair_df["major_minor"].fillna("None")
+repair_df["remarks"] = repair_df["remarks"].fillna("None")
+
+edited_df = st.data_editor(
+    repair_df,
+    column_config={
+        "major_minor": st.column_config.SelectboxColumn(
+            "Major/Minor",
+            options=["None", "Major", "Minor"]
+        ),
+        "remarks": st.column_config.TextColumn("Remarks")
+    },
+    disabled=["body_no"],
+    hide_index=True,
+    width="stretch"
+)
+
+# ===========================================
+# Save Repair Status to DB
+# ===========================================
+def clean_value(series):
+    """Strip whitespace and turn blank / 'None' into NULL (None)."""
+    s = series.fillna("").astype(str).str.strip()
+    return s.where(~s.str.lower().isin(["", "none"]), None)
+
+if st.button("Save Repair Status"):
+    new_df = pd.DataFrame({
+        "body_no": edited_df["body_no"].values,
+        "major_minor": clean_value(edited_df["major_minor"]).values,
+        "remarks": clean_value(edited_df["remarks"]).values,
+    })
+    old_major = clean_value(repair_df["major_minor"]).values
+    old_remarks = clean_value(repair_df["remarks"]).values
+
+    # A row is changed if either field differs from what is displayed
+    changed = (
+        (pd.Series(new_df["major_minor"].values).fillna("").values != pd.Series(old_major).fillna("").values) |
+        (pd.Series(new_df["remarks"].values).fillna("").values != pd.Series(old_remarks).fillna("").values)
+    )
+
+    # Save if at least one field has a real value (either field alone is enough)
+    has_value = new_df["major_minor"].notna() | new_df["remarks"].notna()
+
+    save_df = new_df.loc[changed & has_value].copy()
+
+    if save_df.empty:
+        st.warning("No changes with a real value to save.")
+    else:
+        save_df["last_updated"] = datetime.now()
+        save_df.to_sql(
+            "repair_status",
+            conn,
+            if_exists="append",
+            index=False
+        )
+        st.success(f"Saved {len(save_df)} repair records.")
 
 # ===========================================
 # Bucket History Table UI

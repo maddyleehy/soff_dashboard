@@ -347,3 +347,23 @@ def to_db_datetime(value, date_only=False):
         return None
 
     return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
+
+# =====================================
+# DT conversion
+# =====================================
+def get_repair_vehicles():
+    conn = sqlite3.connect("vehicle_history.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT OR IGNORE INTO repair_progress (body_no)
+    SELECT DISTINCT body_no
+    FROM bucket_history
+    WHERE last_updated = (
+        SELECT MAX(last_updated)
+        FROM bucket_history
+    )
+    """)
+
+    conn.commit()
+    conn.close()

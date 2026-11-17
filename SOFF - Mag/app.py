@@ -218,10 +218,39 @@ summary = (
 changes_qty = changes[changes["change"].isin(["Changed"])].groupby(["body_no"])
 new_qty = changes[changes["change"].isin(["New"])].groupby(["body_no"])
 
-st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
-st.write(f"**Body Number with changes:** {len(changes_qty)}")
-st.write(f"**Body Number with new defects:** {len(new_qty)}")
+# Trial Change Count Logic
+changed_cars = set(
+    changes.loc[
+        changes["change"] == "Changed",
+        "body_no"
+    ]
+)
+all_new_cars = set(
+    changes.groupby("body_no")["change"]
+    .apply(lambda x: (x=="New").all())
+    .loc[lambda x:x]
+    .index
+    )
 
+cars_with_changes = changed_cars - all_new_cars
+
+st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
+st.write(f"**Body Number with changes:** {len(cars_with_changes)}")
+st.write(f"**Body Number with new defects:** {len(all_new_cars)}")
+for car in [
+    "M2 025205",
+    "M2 028200",
+    "M2 028059",
+    "M2 028204",
+    "M2 029552"
+]:
+    st.write(car)
+    st.write(
+        changes.loc[
+            changes["body_no"] == car,
+            "change"
+        ].value_counts()
+    )
 
 if summary.empty: #summary -> change_summary
     st.info ("No status changes between the latest and previous load.")

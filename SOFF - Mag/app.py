@@ -107,7 +107,9 @@ all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary
 
 all_part_summary = get_part_summary(conn, all_wip_list)
 
-st.dataframe(all_part_summary)
+all_vehicle_summary = all_vehicle_summary.merge(all_part_summary, on="body_no", how="left")
+
+st.dataframe(all_vehicle_summary)
     
 # ===========================================
 # Vehicle Buckets UI
@@ -157,7 +159,13 @@ st.write(f"Selected Bucket: {selected_bucket}")
 bucket_vehicles_df = latest_bucket_df[
     latest_bucket_df["bucket"] == selected_bucket
 ]
+bucket_vehicles_df = bucket_vehicles_df.merge(all_vehicle_summary[["body_no","prod_part_status","repair_part_status"]],
+                    on="body_no", how="left")
 #print(latest_bucket_df)
+if selected_bucket == "PC-HC1":
+    bucket_vehicles_df["part_status"] = bucket_vehicles_df["prod_part_status"]
+else:
+    bucket_vehicles_df["part_status"] = bucket_vehicles_df["repair_part_status"]
 
 st.subheader(f"Vehicles in {selected_bucket}")
 
@@ -166,7 +174,8 @@ st.dataframe(
         [
             "body_no",
             "sub_bucket_nm",
-            "status_nm"
+            "status_nm",
+            "part_status"
             #"parts_ETA"
         ]
     ],
@@ -312,13 +321,19 @@ search_body = st.text_input(
 )
 
 if search_body:
+    search_text = "".join(search_body.split())
+
     search_result = all_vehicle_summary[
         all_vehicle_summary["body_no"]
-        .str.contains(search_body, case=False, na=False)
+        .astype(str)
+        .str.replace(r"\s+", "", regex=True)
+        .str.contains(search_text, case=False, na=False)
     ]
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
+    if not search_result.empty:
+        actual_body_no = search_result.iloc[0]["body_no"]
     #st.dataframe(
     #    search_result,
     #    column_order = ordered_columns (search_result),
@@ -335,7 +350,7 @@ if search_body:
         """
         SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status, unique_id, inspec_part_nm, fault_nm, stn_nm
         FROM defect_history 
-        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))
+        WHERE (body_no) = ? and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = ?)
         ORDER BY
         CASE defect_status
         WHEN 'Repair In Progress' THEN 0
@@ -348,7 +363,7 @@ if search_body:
 
         """,
         conn,
-        params = [search_body, search_body]
+        params = [actual_body_no, actual_body_no]
     )
 
     repair_status = defect_history["defect_status"].astype(str).str.lower()
@@ -357,7 +372,7 @@ if search_body:
     pending_qc_count = int((repair_status == "repair completed, pending qc confirm").sum())
 
    
-    st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
+    st.subheader (f"Defect for {actual_body_no} ({len(defect_history)})")
     st.write(f"**Pending Repair:** {pending_repair_count}")
     st.write(f"**Repair In Progress:** {repair_in_progress_count}")
     st.write(f"**Repair Completed, Pending QC Confirm:** {pending_qc_count}")
@@ -380,9 +395,9 @@ if search_body:
     # Parts table
     # ===========================================
     pending_parts = pd.read_sql(
-        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
+        "SELECT * FROM parts_history WHERE (body_no) = ? and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = ?)",
         conn,
-        params = [search_body, search_body]
+        params=[actual_body_no, actual_body_no]
     )
 
     pending_parts = pending_parts.drop(columns=["body_no", "id","text"], errors = "ignore")
@@ -392,7 +407,7 @@ if search_body:
     pending_count = int((parts_status == "open").sum())
     supplied_count = int(parts_status.isin(["confirmed", "resolved"]).sum())
 
-    st.subheader (f"Parts for {search_body.upper()} ({len(pending_parts)})")
+    st.subheader (f"Parts for {actual_body_no} ({len(pending_parts)})")
     st.write(f"**Pending parts:** {pending_count}")
     st.write(f"**Parts supplied:** {supplied_count}")
 

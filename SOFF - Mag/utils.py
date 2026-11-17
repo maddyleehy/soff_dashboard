@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 
 # =====================================
@@ -44,9 +45,107 @@ def get_bucket_summary(bucket_df): #output of latest bucket combined with defect
          .sort_values("vehicle_count", ascending=False))
 
 
-## =====================================
-## Defect Logic
-## =====================================
+# =====================================
+# Bucket Logic
+# =====================================
+
+def get_part_summary(conn, body_list):
+    if not body_list:
+        return pd.DataFrame(columns = [
+            "body_no", "prod_part_status", "prod_pending_count", "prod_supplied_count", 
+            "repair_part_status", "repair_pending_count", "repair_supplied_count", 
+        ])
+    
+    placeholders = ",".join(["?"]*len(body_list))
+    query = f"""
+    SELECT
+        p.body_no, 
+        
+         SUM(
+                CASE
+                    WHEN lower(trim(p.status)) = 'open'
+                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS prod_pending_count,
+
+          SUM(
+                CASE
+                    WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
+                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS prod_supplied_count,       
+
+
+         SUM(
+                CASE
+                    WHEN lower(trim(p.status)) = 'open'
+                    AND p.text = 'Repair Part Order'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS repair_pending_count,                        
+
+
+          SUM(
+                CASE
+                    WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
+                    AND p.text = 'Repair Part Order'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS repair_supplied_count 
+
+        FROM parts_history AS p
+
+        WHERE last_updated = (
+            SELECT MAX(last_updated)
+            FROM parts_history
+        )
+        
+        AND p.body_no IN ({placeholders})
+        
+        GROUP BY p.body_no
+
+"""
+    
+    df = pd.read_sql(query, conn, params=body_list)
+    df["prod_part_status"] = np.select(
+        [
+            df["prod_pending_count"] > 0,
+            (df["prod_pending_count"] == 0) & (df["prod_supplied_count"] > 0)
+        ],
+        [
+            "Pending Parts",
+            "All Parts Supplied"
+        ],
+        default = "No Parts Order"
+    )
+    df["repair_part_status"] = np.select(
+            [
+                df["repair_pending_count"] > 0,
+                (df["repair_pending_count"] == 0) & (df["repair_supplied_count"] > 0)
+            ],
+            [
+                "Pending Parts",
+                "All Parts Supplied"
+            ],
+            default = "No Part Order"
+        )
+    df = df[
+    [
+        "body_no", "prod_part_status", "prod_pending_count","prod_supplied_count",
+        "repair_part_status", "repair_pending_count", "repair_supplied_count",
+    ]
+    ]
+    return df
+
+# =====================================
+# Defect Logic
+# =====================================
 
 def get_defect_summary(conn, body_list): #repair count logic (num defect counts, repair started, repair completed, quality accepted) for all cars
     if not body_list:
@@ -285,12 +384,11 @@ def get_status_changes(conn):
     else:
         previous = (
             df[df["last_updated"] == prev_ts]
-            .drop_duplicates("unique_id", keep = "last")
-            [["unique_id", "defect_status"]]
+            .drop_duplicates("unique_id", keep = "last")[["unique_id", "defect_status"]]
             .rename(columns = {"defect_status":"prev_defect_status"})
             
         )
-        current = current.merge(previous, on="unique_id", how = "left")
+        current = current.merge(previous, on="unique_id", how="left")
 
     current ["change"] = current.apply(
         lambda r:"New" if pd.isna(r["prev_defect_status"])
@@ -301,7 +399,6 @@ def get_status_changes(conn):
     current = current.rename(columns = {"defect_status" : "current_defect_status"})
    
     return current
-
 
 
 # =====================================
@@ -349,3 +446,23 @@ def to_db_datetime(value, date_only=False):
         return None
 
     return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
+
+# =====================================
+# DT conversion
+# =====================================
+def get_repair_vehicles():
+    conn = sqlite3.connect("vehicle_history.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT OR IGNORE INTO repair_progress (body_no)
+    SELECT DISTINCT body_no
+    FROM bucket_history
+    WHERE last_updated = (
+        SELECT MAX(last_updated)
+        FROM bucket_history
+    )
+    """)
+
+    conn.commit()
+    conn.close()

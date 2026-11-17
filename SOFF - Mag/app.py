@@ -9,7 +9,7 @@ from db import (
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary)
 
 
 #Load once helper function
@@ -92,52 +92,11 @@ load_once(te1_file, "te1", load_te1_master_to_db, "TE1 Master")
 
 
 # ===========================================
-# Historical count for bucket, defect, parts
-# ===========================================
-
-#bucket_count = pd.read_sql(
-#    """
-#    SELECT COUNT(*) AS cnt
-#    FROM bucket_history
-#    """,
-#    conn
-#)
-#defect_count = pd.read_sql(
-#    """
-#    SELECT COUNT(*) AS cnt
-#    FROM defect_history
-#    """,
-#    conn
-#)
-#parts_count = pd.read_sql(
-#    "SELECT COUNT(*) AS cnt " \
-#    "FROM parts_history", 
-#    conn)
-#
-#st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
-#
-#col1, col2, col3 = st.columns(3)
-#with col1:
-#    st.metric(
-#        "Bucket Records",
-#        int(bucket_count.iloc[0]["cnt"])
-#    )
-#with col2:
-#    st.metric(
-#        "Defect Records",
-#        int(defect_count.iloc[0]["cnt"])
-#    )
-#with col3:
-#    st.metric(
-#        "Parts Records",
-#        int(parts_count.iloc[0]["cnt"])
-#    )   
-
-# ===========================================
 # ===========================================
 
 
 latest_bucket_df = get_latest_bucket(conn)
+#latest_bucket_df["parts_status"] = df.apply
 
 # Defect Count Logic
 all_wip_list = latest_bucket_df["body_no"].unique().tolist() #list of unsigned off vehicles
@@ -146,7 +105,9 @@ all_defect_summary = get_defect_summary(conn, all_wip_list) #defect count logic 
 
 all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary) #bucket and defect count for unsigned off vehicles
 
+all_part_summary = get_part_summary(conn, all_wip_list)
 
+st.dataframe(all_part_summary)
     
 # ===========================================
 # Vehicle Buckets UI
@@ -302,6 +263,9 @@ default_column_order = [
     "status",
     "defect_status",
     "fault_input_date",
+    "stn_nm",
+    "inspec_part_nm", 
+    "fault_nm", 
     "repair_yn",
     "repairer_nm",
     "repair_start_dt",
@@ -355,39 +319,13 @@ if search_body:
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
-    st.dataframe(
-        search_result,
-        column_order = ordered_columns (search_result),
-        width="stretch",
-        hide_index=True
-    )
+    #st.dataframe(
+    #    search_result,
+    #    column_order = ordered_columns (search_result),
+    #    width="stretch",
+    #    hide_index=True
+    #)
 
-    # ===========================================
-    # Parts table
-    # ===========================================
-    pending_parts = pd.read_sql(
-        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
-        conn,
-        params = [search_body, search_body]
-    )
-
-    pending_parts = pending_parts.drop(columns=["body_no", "id","text"], errors = "ignore")
-
-    #script to return pending parts and parts supplied number
-    parts_status = pending_parts["status"].astype(str).str.strip().str.lower()
-    pending_count = int((parts_status == "open").sum())
-    supplied_count = int(parts_status.isin(["confirmed", "resolved"]).sum())
-
-    st.subheader (f"Parts for {search_body.upper()} ({len(pending_parts)})")
-    st.write(f"**Pending parts:** {pending_count}")
-    st.write(f"**Parts supplied:** {supplied_count}")
-
-    st.dataframe(
-        pending_parts,
-        column_order = ordered_columns(pending_parts),
-        width = "stretch",
-        hide_index = True
-    )
 
     # ===========================================
     # Defects table
@@ -395,7 +333,7 @@ if search_body:
     
     defect_history = pd.read_sql(
         """
-        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status, unique_id
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status, unique_id, inspec_part_nm, fault_nm, stn_nm
         FROM defect_history 
         WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))
         ORDER BY
@@ -436,6 +374,37 @@ if search_body:
         width = "stretch",
         hide_index = True
         )
+
+
+    # ===========================================
+    # Parts table
+    # ===========================================
+    pending_parts = pd.read_sql(
+        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
+        conn,
+        params = [search_body, search_body]
+    )
+
+    pending_parts = pending_parts.drop(columns=["body_no", "id","text"], errors = "ignore")
+
+    #script to return pending parts and parts supplied number
+    parts_status = pending_parts["status"].astype(str).str.strip().str.lower()
+    pending_count = int((parts_status == "open").sum())
+    supplied_count = int(parts_status.isin(["confirmed", "resolved"]).sum())
+
+    st.subheader (f"Parts for {search_body.upper()} ({len(pending_parts)})")
+    st.write(f"**Pending parts:** {pending_count}")
+    st.write(f"**Parts supplied:** {supplied_count}")
+
+    st.dataframe(
+        pending_parts,
+        column_order = ordered_columns(pending_parts),
+        width = "stretch",
+        hide_index = True
+    )
+
+
+
 
 # ===========================================
 # Repair Status
@@ -528,6 +497,8 @@ if st.button("Save Repair Status"):
             index=False
         )
         st.success(f"Saved {len(save_df)} repair records.")
+
+
 
 # ===========================================
 # Bucket History Table UI

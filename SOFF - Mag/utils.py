@@ -44,9 +44,77 @@ def get_bucket_summary(bucket_df): #output of latest bucket combined with defect
          .sort_values("vehicle_count", ascending=False))
 
 
-## =====================================
-## Defect Logic
-## =====================================
+# =====================================
+# Bucket Logic
+# =====================================
+
+def get_part_summary(conn, body_list):
+    if not body_list:
+        return pd.DataFrame(columns = [
+            "body_no", "prod_part_status", "prod_pending_count", "prod_supplied_count", 
+            "prod_part_status", "repair_pending_count", "repair_supplied_count", 
+        ])
+    
+    placeholders = ",".join(["?"]*len(body_list))
+    query = f"""
+    SELECT
+        p.body_no, 
+        
+         SUM(
+                CASE
+                    WHEN lower(trim(p.status)) = 'open'
+                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS prod_pending_count,
+
+          SUM(
+                CASE
+                    WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
+                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS prod_supplied_count,       
+
+
+         SUM(
+                CASE
+                    WHEN lower(trim(p.status)) = 'open'
+                    AND p.text = 'Repair Part Order'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS repair_pending_count,                        
+
+
+          SUM(
+                CASE
+                    WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
+                    AND p.text = 'Repair Part Order'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS repair_supplied_count 
+
+        FROM parts_history AS p
+
+        WHERE last_updated = (
+            SELECT MAX(last_updated)
+            FROM parts_history
+        )
+        
+        AND p.body_no IN ({placeholders})
+        
+        GROUP BY p.body_no
+
+"""
+    return pd.read_sql(query, conn, params=body_list)
+
+# =====================================
+# Defect Logic
+# =====================================
 
 def get_defect_summary(conn, body_list): #repair count logic (num defect counts, repair started, repair completed, quality accepted) for all cars
     if not body_list:

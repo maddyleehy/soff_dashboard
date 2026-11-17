@@ -102,3 +102,33 @@ conn.close()
 #    "SELECT sql FROM sqlite_master WHERE name = 'bucket_history'"
 #).fetchone()[0])
 #conn.close()
+
+
+
+#legacy load
+#UPDATE defect_history
+#SET file_name = 'vehicle_defects_20240115'
+#WHERE last_updated = '2024-01-15 09:30:00'
+#  AND file_name IS NULL;
+
+
+
+import sqlite3
+
+conn = sqlite3.connect("data/vehicles.db")  # adjust to your database
+cur = conn.cursor()
+cur.execute(
+    """
+    UPDATE defect_history
+    SET file_name = ?
+    WHERE last_updated = ? AND file_name IS NULL
+    """,
+    ("vehicle_defects_20240115", "2024-01-15 09:30:00"),
+)
+conn.commit()
+print(f"Updated {cur.rowcount} rows")
+conn.close()
+
+
+
+

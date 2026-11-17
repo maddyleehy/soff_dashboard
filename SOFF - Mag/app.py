@@ -319,6 +319,7 @@ search_body = st.text_input(
     "Enter Body No",
     placeholder="e.g. ABC123"
 )
+actual_body_no = None
 
 if search_body:
     search_text = "".join(search_body.split())

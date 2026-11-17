@@ -332,6 +332,7 @@ if search_body:
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
+    actual_body_no = None
     if not search_result.empty:
         actual_body_no = search_result.iloc[0]["body_no"]
     #st.dataframe(

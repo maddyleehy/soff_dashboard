@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 
 # =====================================
@@ -52,7 +53,7 @@ def get_part_summary(conn, body_list):
     if not body_list:
         return pd.DataFrame(columns = [
             "body_no", "prod_part_status", "prod_pending_count", "prod_supplied_count", 
-            "prod_part_status", "repair_pending_count", "repair_supplied_count", 
+            "repair_part_status", "repair_pending_count", "repair_supplied_count", 
         ])
     
     placeholders = ",".join(["?"]*len(body_list))
@@ -110,7 +111,37 @@ def get_part_summary(conn, body_list):
         GROUP BY p.body_no
 
 """
-    return pd.read_sql(query, conn, params=body_list)
+    
+    df = pd.read_sql(query, conn, params=body_list)
+    df["prod_part_status"] = np.select(
+        [
+            df["prod_pending_count"] > 0,
+            (df["prod_pending_count"] == 0) & (df["prod_supplied_count"] > 0)
+        ],
+        [
+            "Pending Parts",
+            "All Parts Supplied"
+        ],
+        default = "No Parts Order"
+    )
+    df["repair_part_status"] = np.select(
+            [
+                df["repair_pending_count"] > 0,
+                (df["repair_pending_count"] == 0) & (df["repair_supplied_count"] > 0)
+            ],
+            [
+                "Pending Parts",
+                "All Parts Supplied"
+            ],
+            default = "No Part Order"
+        )
+    df = df[
+    [
+        "body_no", "prod_part_status", "prod_pending_count","prod_supplied_count",
+        "repair_part_status", "repair_pending_count", "repair_supplied_count",
+    ]
+    ]
+    return df
 
 # =====================================
 # Defect Logic

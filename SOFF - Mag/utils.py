@@ -400,6 +400,44 @@ def get_status_changes(conn):
    
     return current
 
+# if defect_count == 0:
+#         return "No Defects"
+
+#     elif repair_in_progress > 0:
+#         return "Repair In Progress"
+
+#     elif pending_quality > 0 :
+#         return "Quality Accepted"
+
+#     elif pending_quality + quality_accepted == defect_count:
+#         return "Repair Completed, Pending QC"
+
+#     elif pending_repair > 0:
+#         return "Pending Repair Start"
+
+#     else:
+#         return "Unknown"
+
+# =====================================
+# Fresh Cars Logic
+# =====================================
+
+def repair_history_cars(conn, body_list):
+    if not body_list:
+        return set()
+    placeholders = ",".join(["?"] * len(body_list))
+
+    repair_history = pd.read_sql( f"""
+        SELECT DISTINCT body_no
+        FROM defect_history
+        WHERE body_no IN ({placeholders})
+        AND defect_status IN (
+                'Repair In Progress',
+                'Repair Completed, Pending QC Confirm',
+                'QC Accepted'
+        )
+        """, conn, params=body_list)
+    return set(repair_history["body_no"])
 
 # =====================================
 # DT conversion

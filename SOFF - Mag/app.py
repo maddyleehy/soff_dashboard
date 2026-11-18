@@ -9,7 +9,7 @@ from db import (
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary, repair_history_cars)
 
 
 #Load once helper function
@@ -214,13 +214,15 @@ summary = (
     .reset_index()
     .sort_values("change_count", ascending = False)
 )
-
-changes_qty = changes[changes["change"].isin(["Changed"])].groupby(["body_no"])
-new_qty = changes[changes["change"].isin(["New"])].groupby(["body_no"])
+cars_with_repair_history = repair_history_cars(conn, summary["body_no"].tolist())
+summary["fresh car"] = summary["body_no"].apply(lambda x: "Yes" if x not in cars_with_repair_history else "No")
+changes_qty = changes[changes["change"].isin(["Changed"])].groupby("body_no")
+changed_body_list = list(changes_qty.groups.keys())
+new_qty = changes[changes["change"].isin(["New"])].groupby("body_no")
 
 st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
-st.write(f"**Body Number with changes:** {len(changes_qty)}")
-st.write(f"**Body Number with new defects:** {len(new_qty)}")
+st.write(f"**Body Number with changes:** {len(summary[summary["fresh car"]=="No"])}")
+st.write(f"**Body Number with new defects:** {len(summary[summary["fresh car"]=="Yes"])}")
 
 
 if summary.empty: #summary -> change_summary

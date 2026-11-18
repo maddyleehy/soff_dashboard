@@ -3,37 +3,64 @@
 # ADDING NEW COLUMNS
 # =====================================
 
-#import sqlite3
+from os import name
+import sqlite3
+
+#new_columns = {
+#    "prod_part_status":"TEXT",
+#    "prod_pending_count":"INTEGER",
+#    "prod_supplied_count":"INTEGER",
+#    "repair_part_status":"TEXT",
+#    "repair_pending_count":"INTEGER",
+#    "repair_supplied_count":"INTEGER",
+#}
+#existing = {row[1] for row in conn.execute("PRAGMA table_info(dahsboard_summary)")}
 #
-#conn = sqlite3.connect("vehicle_history.db")
-#conn.execute("ALTER TABLE defect_history ADD COLUMN file_name TEXT")
+#for name, col_type in new_columns.items():
+#    if name in existing:
+#        print(f"skipped {name} (already exist)")
+#        continue
+#    conn.execute(f"ALTER TABLE dashboard_summary ADD COLUMN {name} {col_type}")
+#    print (f"added {name}")
+#
 #conn.commit()
 #conn.close()
 #print("Columns added")
 
+# =====================================
+# RENAME COLUMNS
+# =====================================
+#import sqlite3
+#
+#conn = sqlite3.connect("vehicle_history.db")
+#conn.execute("ALTER TABLE repair_status RENAME COLUMN remark TO remarks")
+#conn.commit()
+#conn.close()
+#print("Columns renamed")
 
 # =====================================
 # BACKFILL
 # =====================================
 
 
-import sqlite3
-import pandas as pd
+# import sqlite3
+# import pandas as pd
 
-conn = sqlite3.connect("vehicle_history.db")
+# conn = sqlite3.connect("vehicle_history.db")
 
-#master_df = pd.read_csv("data/employee_master_list.csv", dtype=str)
-#master_df.columns = master_df.columns.str.strip()
-#code_dict = dict(zip(master_df["User/Employee ID"], master_df["First Name"]))
+# #master_df = pd.read_csv("data/employee_master_list.csv", dtype=str)
+# #master_df.columns = master_df.columns.str.strip()
+# #code_dict = dict(zip(master_df["User/Employee ID"], master_df["First Name"]))
 
-rows = conn.execute("SELECT id, inspector_id, repairer_id, confirmer_id FROM defect_history").fetchall()
+# rows = conn.execute("SELECT id, inspector_id, repairer_id, confirmer_id FROM defect_history").fetchall()
 
-conn.executemany(
-    "UPDATE defect_history SET file_name = ? WHERE id = ?",
-    [(code_dict.get(insp), code_dict.get(rep), code_dict.get(conf), row_id) for row_id, insp, rep, conf in rows],
-)
-conn.commit()
-conn.close()
+# conn.executemany(
+#     "UPDATE defect_history SET file_name = ? WHERE id = ?",
+#     [(code_dict.get(insp), code_dict.get(rep), code_dict.get(conf), row_id) for row_id, insp, rep, conf in rows],
+# )
+
+# conn.commit()
+# conn.close()
 
 # =====================================
 # initial script given

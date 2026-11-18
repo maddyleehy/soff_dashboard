@@ -9,7 +9,7 @@ from db import (
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary, repair_history_cars)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes)
 
 
 #Load once helper function
@@ -92,11 +92,52 @@ load_once(te1_file, "te1", load_te1_master_to_db, "TE1 Master")
 
 
 # ===========================================
+# Historical count for bucket, defect, parts
+# ===========================================
+
+#bucket_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM bucket_history
+#    """,
+#    conn
+#)
+#defect_count = pd.read_sql(
+#    """
+#    SELECT COUNT(*) AS cnt
+#    FROM defect_history
+#    """,
+#    conn
+#)
+#parts_count = pd.read_sql(
+#    "SELECT COUNT(*) AS cnt " \
+#    "FROM parts_history", 
+#    conn)
+#
+#st.metric("Parts Records", int(parts_count.iloc[0]["cnt"]))
+#
+#col1, col2, col3 = st.columns(3)
+#with col1:
+#    st.metric(
+#        "Bucket Records",
+#        int(bucket_count.iloc[0]["cnt"])
+#    )
+#with col2:
+#    st.metric(
+#        "Defect Records",
+#        int(defect_count.iloc[0]["cnt"])
+#    )
+#with col3:
+#    st.metric(
+#        "Parts Records",
+#        int(parts_count.iloc[0]["cnt"])
+#    )   
+
+# ===========================================
 # ===========================================
 
 
 latest_bucket_df = get_latest_bucket(conn)
-#latest_bucket_df["parts_status"] = df.apply
 
 # Defect Count Logic
 all_wip_list = latest_bucket_df["body_no"].unique().tolist() #list of unsigned off vehicles
@@ -105,11 +146,7 @@ all_defect_summary = get_defect_summary(conn, all_wip_list) #defect count logic 
 
 all_vehicle_summary = build_vehicle_summary(latest_bucket_df, all_defect_summary) #bucket and defect count for unsigned off vehicles
 
-all_part_summary = get_part_summary(conn, all_wip_list)
 
-all_vehicle_summary = all_vehicle_summary.merge(all_part_summary, on="body_no", how="left")
-
-st.dataframe(all_vehicle_summary)
     
 # ===========================================
 # Vehicle Buckets UI
@@ -159,13 +196,7 @@ st.write(f"Selected Bucket: {selected_bucket}")
 bucket_vehicles_df = latest_bucket_df[
     latest_bucket_df["bucket"] == selected_bucket
 ]
-bucket_vehicles_df = bucket_vehicles_df.merge(all_vehicle_summary[["body_no","prod_part_status","repair_part_status"]],
-                    on="body_no", how="left")
 #print(latest_bucket_df)
-if selected_bucket == "PC-HC1":
-    bucket_vehicles_df["part_status"] = bucket_vehicles_df["prod_part_status"]
-else:
-    bucket_vehicles_df["part_status"] = bucket_vehicles_df["repair_part_status"]
 
 st.subheader(f"Vehicles in {selected_bucket}")
 
@@ -174,8 +205,7 @@ st.dataframe(
         [
             "body_no",
             "sub_bucket_nm",
-            "status_nm",
-            "part_status"
+            "status_nm"
             #"parts_ETA"
         ]
     ],
@@ -213,17 +243,10 @@ summary = (
     .rename_axis(columns=None)
     .reset_index()
     .sort_values("change_count", ascending = False)
+
 )
-cars_with_repair_history = repair_history_cars(conn, summary["body_no"].tolist())
-summary["fresh car"] = summary["body_no"].apply(lambda x: "Yes" if x not in cars_with_repair_history else "No")
-changes_qty = changes[changes["change"].isin(["Changed"])].groupby("body_no")
-changed_body_list = list(changes_qty.groups.keys())
-new_qty = changes[changes["change"].isin(["New"])].groupby("body_no")
 
-st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
-st.write(f"**Body Number with changes:** {len(summary[summary["fresh car"]=="No"])}")
-st.write(f"**Body Number with new defects:** {len(summary[summary["fresh car"]=="Yes"])}")
-
+st.subheader("Body Numbers with Status Changes")
 
 if summary.empty: #summary -> change_summary
     st.info ("No status changes between the latest and previous load.")
@@ -248,12 +271,12 @@ changes_view = changes.loc[
      ],
 ]
 
-#st.subheader(f"Defect Status Changes ({len(changes_view)})")
-#st.dataframe(
-#    changes_view,    
-#    width="stretch",
-#    hide_index=True,
-#)
+st.subheader(f"Defect Status Changes ({len(changes_view)})")
+st.dataframe(
+    changes_view,    
+    width="stretch",
+    hide_index=True,
+)
 
 
 # ===========================================
@@ -261,10 +284,8 @@ changes_view = changes.loc[
 # ===========================================
 default_column_order = [
     "id",
-    "change",
     "body_no",
-    "current_defect_status",
-    "prev_defect_status",
+    "last_updated",
     "bucket",
     "vehicle_status",
     "last_status",
@@ -274,9 +295,6 @@ default_column_order = [
     "status",
     "defect_status",
     "fault_input_date",
-    "stn_nm",
-    "inspec_part_nm", 
-    "fault_nm", 
     "repair_yn",
     "repairer_nm",
     "repair_start_dt",
@@ -284,7 +302,6 @@ default_column_order = [
     "confirm_yn",
     "confirmer_nm",
     "confirm_dt",
-    "last_updated",
 ]
 
 
@@ -323,94 +340,37 @@ search_body = st.text_input(
 )
 
 if search_body:
-    search_text = "".join(search_body.split())
-
     search_result = all_vehicle_summary[
         all_vehicle_summary["body_no"]
-        .astype(str)
-        .str.replace(r"\s+", "", regex=True)
-        .str.contains(search_text, case=False, na=False)
+        .str.contains(search_body, case=False, na=False)
     ]
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
-    actual_body_no = None
-    if not search_result.empty:
-        actual_body_no = search_result.iloc[0]["body_no"]
-    #st.dataframe(
-    #    search_result,
-    #    column_order = ordered_columns (search_result),
-    #    width="stretch",
-    #    hide_index=True
-    #)
-
-
-    # ===========================================
-    # Defects table
-    # ===========================================
-    
-    defect_history = pd.read_sql(
-        """
-        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status, unique_id, inspec_part_nm, fault_nm, stn_nm
-        FROM defect_history 
-        WHERE (body_no) = ? and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = ?)
-        ORDER BY
-        CASE defect_status
-        WHEN 'Repair In Progress' THEN 0
-        WHEN 'Pending Repair' THEN 1
-        WHEN 'Repair Completed, Pending QC Confirm' THEN 2
-        WHEN 'QC Accepted' THEN 3
-        WHEN 'Online Repairer - Inline' THEN 4
-        ELSE 5
-        END
-
-        """,
-        conn,
-        params = [actual_body_no, actual_body_no]
-    )
-
-    repair_status = defect_history["defect_status"].astype(str).str.lower()
-    pending_repair_count = int((repair_status == "pending repair").sum())
-    repair_in_progress_count = int((repair_status == "repair in progress").sum())
-    pending_qc_count = int((repair_status == "repair completed, pending qc confirm").sum())
-
-   
-    st.subheader (f"Defect for {actual_body_no} ({len(defect_history)})")
-    st.write(f"**Pending Repair:** {pending_repair_count}")
-    st.write(f"**Repair In Progress:** {repair_in_progress_count}")
-    st.write(f"**Repair Completed, Pending QC Confirm:** {pending_qc_count}")
-
-    status_cols = changes[["unique_id", "current_defect_status", "prev_defect_status", "change"]]
-    defect_view = defect_history.merge(status_cols, on ="unique_id", how = "left").drop(columns = ["body_no", "defect_status"])
-    defect_view ["change"] = defect_view ["change"].fillna("No Prior Load")
-
     st.dataframe(
-        #defect_history,
-        #column_order = ordered_columns(defect_history),
-        defect_view, 
-        column_order = ordered_columns(defect_view),
-        width = "stretch",
-        hide_index = True
-        )
-
+        search_result,
+        column_order = ordered_columns (search_result),
+        width="stretch",
+        hide_index=True
+    )
 
     # ===========================================
     # Parts table
     # ===========================================
     pending_parts = pd.read_sql(
-        "SELECT * FROM parts_history WHERE (body_no) = ? and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = ?)",
+        "SELECT * FROM parts_history WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX(last_updated) from parts_history where (body_no) = UPPER(?))",
         conn,
-        params=[actual_body_no, actual_body_no]
+        params = [search_body, search_body]
     )
 
-    pending_parts = pending_parts.drop(columns=["body_no", "id","text"], errors = "ignore")
+    pending_parts = pending_parts.drop(columns=["id","text"], errors = "ignore")
 
     #script to return pending parts and parts supplied number
     parts_status = pending_parts["status"].astype(str).str.strip().str.lower()
     pending_count = int((parts_status == "open").sum())
     supplied_count = int(parts_status.isin(["confirmed", "resolved"]).sum())
 
-    st.subheader (f"Parts for {actual_body_no} ({len(pending_parts)})")
+    st.subheader (f"Parts for {search_body.upper()} ({len(pending_parts)})")
     st.write(f"**Pending parts:** {pending_count}")
     st.write(f"**Parts supplied:** {supplied_count}")
 
@@ -421,101 +381,48 @@ if search_body:
         hide_index = True
     )
 
+    # ===========================================
+    # Defects table
+    # ===========================================
+    
+    defect_history = pd.read_sql(
+        """
+        SELECT body_no, fault_input_date, repair_yn, repair_start_dt,repair_end_dt, repairer_nm, confirm_yn, confirm_dt, confirmer_nm, last_updated, defect_status
+        FROM defect_history 
+        WHERE (body_no) = UPPER(?) and last_updated = (SELECT MAX (last_updated) from defect_history where (body_no) = UPPER(?))
+        ORDER BY
+        CASE defect_status
+        WHEN 'Repair In Progress' THEN 0
+        WHEN 'Pending Repair' THEN 1
+        WHEN 'Repair Completed, Pending QC Confirm' THEN 2
+        WHEN 'QC Accepted' THEN 3
+        WHEN 'Online Repairer - Inline' THEN 5
+        ELSE 3
+        END
 
-
-
-# ===========================================
-# Repair Status
-# ===========================================
-# ===========================================
-# Latest Repair Status (most recent non-null value per field)
-# ===========================================
-latest_repair = pd.read_sql("""
-    SELECT
-        b.body_no,
-        (
-            SELECT r.major_minor
-            FROM repair_status r
-            WHERE r.body_no = b.body_no
-              AND r.major_minor IS NOT NULL
-              AND LOWER(TRIM(r.major_minor)) NOT IN ('', 'none')
-            ORDER BY r.last_updated DESC, r.rowid DESC
-            LIMIT 1
-        ) AS major_minor,
-        (
-            SELECT r.remarks
-            FROM repair_status r
-            WHERE r.body_no = b.body_no
-              AND r.remarks IS NOT NULL
-              AND LOWER(TRIM(r.remarks)) NOT IN ('', 'none')
-            ORDER BY r.last_updated DESC, r.rowid DESC
-            LIMIT 1
-        ) AS remarks
-    FROM (SELECT DISTINCT body_no FROM repair_status) b
-""", conn)
-
-repair_df = (
-    latest_bucket_df[["body_no"]]
-    .drop_duplicates()
-    .merge(latest_repair, on="body_no", how="left")
-)
-repair_df["major_minor"] = repair_df["major_minor"].fillna("None")
-repair_df["remarks"] = repair_df["remarks"].fillna("None")
-
-edited_df = st.data_editor(
-    repair_df,
-    column_config={
-        "major_minor": st.column_config.SelectboxColumn(
-            "Major/Minor",
-            options=["None", "Major", "Minor"]
-        ),
-        "remarks": st.column_config.TextColumn("Remarks")
-    },
-    disabled=["body_no"],
-    hide_index=True,
-    width="stretch"
-)
-
-# ===========================================
-# Save Repair Status to DB
-# ===========================================
-def clean_value(series):
-    """Strip whitespace and turn blank / 'None' into NULL (None)."""
-    s = series.fillna("").astype(str).str.strip()
-    return s.where(~s.str.lower().isin(["", "none"]), None)
-
-if st.button("Save Repair Status"):
-    new_df = pd.DataFrame({
-        "body_no": edited_df["body_no"].values,
-        "major_minor": clean_value(edited_df["major_minor"]).values,
-        "remarks": clean_value(edited_df["remarks"]).values,
-    })
-    old_major = clean_value(repair_df["major_minor"]).values
-    old_remarks = clean_value(repair_df["remarks"]).values
-
-    # A row is changed if either field differs from what is displayed
-    changed = (
-        (pd.Series(new_df["major_minor"].values).fillna("").values != pd.Series(old_major).fillna("").values) |
-        (pd.Series(new_df["remarks"].values).fillna("").values != pd.Series(old_remarks).fillna("").values)
+        """,
+        conn,
+        params = [search_body, search_body]
     )
 
-    # Save if at least one field has a real value (either field alone is enough)
-    has_value = new_df["major_minor"].notna() | new_df["remarks"].notna()
+   #
 
-    save_df = new_df.loc[changed & has_value].copy()
+    repair_status = defect_history["defect_status"].astype(str).str.lower()
+    pending_repair_count = int((repair_status == "pending repair").sum())
+    repair_in_progress_count = int((repair_status == "repair in progress").sum())
+    pending_qc_count = int((repair_status == "repair completed, pending qc confirm").sum())
 
-    if save_df.empty:
-        st.warning("No changes with a real value to save.")
-    else:
-        save_df["last_updated"] = datetime.now()
-        save_df.to_sql(
-            "repair_status",
-            conn,
-            if_exists="append",
-            index=False
+    st.subheader (f"Defect for {search_body.upper()} ({len(defect_history)})")
+    st.write(f"**Pending Repair:** {pending_count}")
+    st.write(f"**Repair In Progress:** {repair_in_progress_count}")
+    st.write(f"**Repair Completed, Pending QC Confirm:** {pending_qc_count}")
+    
+    st.dataframe(
+        defect_history,
+        column_order = ordered_columns(defect_history),
+        width = "stretch",
+        hide_index = True
         )
-        st.success(f"Saved {len(save_df)} repair records.")
-
 
 
 # ===========================================

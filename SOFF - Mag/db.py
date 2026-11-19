@@ -4,13 +4,15 @@ from datetime import datetime
 from utils import to_db_datetime, sort_by_te1, get_defect_status, get_status_changes
 from pathlib import Path
 
+DB_PATH = Path(__file__).parent / "vehicle_history.db"
+
 # =====================================
 # INITIALIZE DATABASE TABLE
 # =====================================
 
 def get_db_connection():
     return sqlite3.connect(
-        "vehicle_history.db",
+        DB_PATH,
         check_same_thread=False
     )
 

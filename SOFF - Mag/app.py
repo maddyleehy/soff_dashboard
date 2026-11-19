@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from db import (
+    get_db_connection,
     load_bucket_csv_to_db, 
     load_defect_csv_to_db, 
     load_parts_csv_to_db, 
@@ -42,16 +43,11 @@ st.set_page_config(
 )
 
 st.title("Unsigned-Off Vehicle Dashboard")
+
 @st.cache_resource
-
-
-def get_db_connection():
-    return sqlite3.connect(
-        "vehicle_history.db",
-        check_same_thread=False
-    )
-
-conn = get_db_connection()
+def get_conn():
+    return get_db_connection()
+conn = get_conn()
 #st.write(
 #    pd.read_sql(
 #        """

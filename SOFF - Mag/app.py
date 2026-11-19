@@ -115,10 +115,10 @@ st.dataframe(all_vehicle_summary)
 # Vehicle Buckets UI
 # ===========================================
 
-st.header("Vehicle Buckets")
+#st.header("Vehicle Buckets")
 
 bucket_summary = get_bucket_summary(latest_bucket_df)
-st.subheader("Vehicle Buckets") # Selected Bucket and display list of vehicles under it
+st.subheader(f"Vehicle Buckets ({len(latest_bucket_df)})") # Selected Bucket and display list of vehicles under it
 
 if bucket_summary.empty:
     st.warning("No bucket data available.")

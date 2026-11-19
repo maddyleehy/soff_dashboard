@@ -64,7 +64,7 @@ def get_part_summary(conn, body_list):
          SUM(
                 CASE
                     WHEN lower(trim(p.status)) = 'open'
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END
@@ -73,7 +73,7 @@ def get_part_summary(conn, body_list):
           SUM(
                 CASE
                     WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END

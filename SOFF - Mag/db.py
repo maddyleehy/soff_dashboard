@@ -1,6 +1,7 @@
 import pandas as pd
 import sqlite3
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from utils import to_db_datetime, sort_by_te1, get_defect_status, get_status_changes
 from pathlib import Path
 
@@ -9,6 +10,8 @@ DB_PATH = Path(__file__).parent / "vehicle_history.db"
 # =====================================
 # INITIALIZE DATABASE TABLE
 # =====================================
+def sg_now():
+    return datetime.now(ZoneInfo("Asia/Singapore"))
 
 def get_db_connection():
     return sqlite3.connect(
@@ -225,7 +228,7 @@ def load_bucket_csv_to_db(csv_file_path):
     
     # Bucket logic
      #new column named bucket = obtain loc_cd from get_bucket function
-    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") #new column name last_updated = current time 
+    df["last_updated"] = sg_now().strftime("%Y-%m-%d %H:%M:%S") #new column name last_updated = current time 
     
     # Rename columns to match database
     df.rename(columns={"BODY_NO": "body_no", "BUCKET": "bucket", "SUB_BUCKET": "sub_bucket", "STATUS": "status"}, inplace=True)
@@ -236,7 +239,7 @@ def load_bucket_csv_to_db(csv_file_path):
     code_dict = dict(zip(master_df["Code"].astype(str), master_df["English"]))
     df["sub_bucket_nm"] = df["sub_bucket"].map(code_dict)
     df["status_nm"] = df["status"].map(code_dict)
-    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    df["last_updated"] = sg_now().strftime("%Y-%m-%d %H:%M:%S")
     
     df = sort_by_te1(df, conn)
     df.to_sql(
@@ -320,7 +323,7 @@ def load_defect_csv_to_db(csv_file_path):
     df["dtl_part_nm"] = df["dtl_part_cd"].map(code_dict)
     df["stn_grp_nm"] = df["stn_grp_cd"].map(code_dict)
     df["stn_nm"] = df["stn_cd"].map(code_dict)
-    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    df["last_updated"] = sg_now().strftime("%Y-%m-%d %H:%M:%S")
     df["defect_status"] = df.apply(get_defect_status, axis=1)
     #df["prev_defect_status"] = df.apply(get_status_changes, axis=1)
     df["file_name"] = get_file_suffix(csv_file_path)
@@ -370,7 +373,7 @@ def load_parts_csv_to_db(csv_file_path):
     df["eta"] = pd.to_datetime(
         df["eta"], errors="coerce"
         ).dt.strftime("%Y-%m-%d")
-    df["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    df["last_updated"] = sg_now().strftime("%Y-%m-%d %H:%M:%S")
     df.columns = [col.lower() for col in df.columns]
     
     df = sort_by_te1(df, conn)

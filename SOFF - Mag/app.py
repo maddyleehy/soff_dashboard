@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from db import (
     get_db_connection,
     load_bucket_csv_to_db, 
@@ -12,6 +13,9 @@ from db import (
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
                    build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary, repair_history_cars)
 
+
+def sg_now():
+    return datetime.now(ZoneInfo("Asia/Singapore"))
 
 #Load once helper function
 
@@ -185,7 +189,7 @@ st.dataframe(
 
 if st.button("Load Database Snapshot", type="primary"):
     dashboard_summary = all_vehicle_summary.copy()
-    dashboard_summary["snapshot_dt"] = datetime.now()
+    dashboard_summary["snapshot_dt"] = sg_now()
     load_dashboard_summary_to_db(dashboard_summary)
     st.success(
         f"Loaded {len(dashboard_summary)} rows"
@@ -503,7 +507,7 @@ if st.button("Save Repair Status"):
     if save_df.empty:
         st.warning("No changes with a real value to save.")
     else:
-        save_df["last_updated"] = datetime.now()
+        save_df["last_updated"] = sg_now()
         save_df.to_sql(
             "repair_status",
             conn,

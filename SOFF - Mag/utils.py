@@ -64,7 +64,7 @@ def get_part_summary(conn, body_list):
          SUM(
                 CASE
                     WHEN lower(trim(p.status)) = 'open'
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END
@@ -73,7 +73,7 @@ def get_part_summary(conn, body_list):
           SUM(
                 CASE
                     WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END
@@ -400,6 +400,44 @@ def get_status_changes(conn):
    
     return current
 
+# if defect_count == 0:
+#         return "No Defects"
+
+#     elif repair_in_progress > 0:
+#         return "Repair In Progress"
+
+#     elif pending_quality > 0 :
+#         return "Quality Accepted"
+
+#     elif pending_quality + quality_accepted == defect_count:
+#         return "Repair Completed, Pending QC"
+
+#     elif pending_repair > 0:
+#         return "Pending Repair Start"
+
+#     else:
+#         return "Unknown"
+
+# =====================================
+# Fresh Cars Logic
+# =====================================
+
+def repair_history_cars(conn, body_list):
+    if not body_list:
+        return set()
+    placeholders = ",".join(["?"] * len(body_list))
+
+    repair_history = pd.read_sql( f"""
+        SELECT DISTINCT body_no
+        FROM defect_history
+        WHERE body_no IN ({placeholders})
+        AND defect_status IN (
+                'Repair In Progress',
+                'Repair Completed, Pending QC Confirm',
+                'QC Accepted'
+        )
+        """, conn, params=body_list)
+    return set(repair_history["body_no"])
 
 # =====================================
 # DT conversion

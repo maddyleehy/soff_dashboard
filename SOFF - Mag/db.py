@@ -202,16 +202,24 @@ def normalize_datetime(value):
         return datetime.strptime(s, "%Y%m%d").strftime("%Y-%m-%d")
     return None                           # unknown format: store NULL and inspect
 
-
-
 # =====================================
 # EXTRACT FILE DT FROM TWX DOWNLOAD
 # =====================================
 def get_file_suffix(file_path, length = 13):
     """Return the last 'length' characters of the file name, excluding .csv.
-    Accepts a pthe string, a Pth, or a streamlit uploaded file. """
+    Accepts a the string, a Path, or a streamlit uploaded file. """
     name = getattr(file_path, "name", file_path) # UploadedFile/Path -> .name, str stays as-is
     return Path(name).stem[-length:]
+
+
+def file_sort_key(file_path):
+    """Sortable datetime from the 'YYMMDD_HHMMSS' suffix
+    Names without a valid timestamp (e.g. legacy_load) sort as oldest."""
+    suffix = get_file_suffix(file_path)
+    try: 
+        return datetime.strptime(suffix, "%y%m%d_%H%M%S")
+    except ValueError:
+        return datetime.min
 
 # =====================================
 # LOAD AND APPEND CSV DATA (Bucket)

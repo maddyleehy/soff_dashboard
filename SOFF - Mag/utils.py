@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime, timezone
 
 # =====================================
@@ -314,6 +315,8 @@ def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect
 # Previous Status Logic
 # =====================================
 
+
+
 #Previous status for latest dashboard summary
 def previous_status(conn, row): 
     body_no = row["body_no"]
@@ -347,28 +350,28 @@ def get_status_changes(conn):
     df = pd.read_sql(
         """
         WITH load_times AS (
-        SELECT DISTINCT file_name
+        SELECT DISTINCT last_updated
         FROM defect_history
-        ORDER BY file_name DESC
+        ORDER BY last_updated DESC
         LIMIT 2
     )
     SELECT * 
     FROM defect_history
-    WHERE file_name IN (SELECT file_name from load_times)
+    WHERE last_updated IN (SELECT last_updated from load_times)
     """,
     conn,
     )
     if df.empty:
         return df
 
-    latest_ts = df["file_name"].max()
-    prev_ts = df.loc[df["file_name"]< latest_ts, "file_name"].max()
+    latest_ts = df["last_updated"].max()
+    prev_ts = df.loc[df["last_updated"]< latest_ts, "last_updated"].max()
 
     # One row per unique_id in each load (keep the last if duplicates exist)
     current = (
-        df[df["file_name"] == latest_ts]
+        df[df["last_updated"] == latest_ts]
         .drop_duplicates("unique_id", keep = "last")
-        [["file_name",          
+        [["last_updated",          
           "body_no", 
           "fault_input_date",
           "stn_grp_nm", 
@@ -383,7 +386,7 @@ def get_status_changes(conn):
         current["prev_status"]= None
     else:
         previous = (
-            df[df["file_name"] == prev_ts]
+            df[df["last_updated"] == prev_ts]
             .drop_duplicates("unique_id", keep = "last")[["unique_id", "defect_status"]]
             .rename(columns = {"defect_status":"prev_defect_status"})
             
@@ -400,23 +403,6 @@ def get_status_changes(conn):
    
     return current
 
-# if defect_count == 0:
-#         return "No Defects"
-
-#     elif repair_in_progress > 0:
-#         return "Repair In Progress"
-
-#     elif pending_quality > 0 :
-#         return "Quality Accepted"
-
-#     elif pending_quality + quality_accepted == defect_count:
-#         return "Repair Completed, Pending QC"
-
-#     elif pending_repair > 0:
-#         return "Pending Repair Start"
-
-#     else:
-#         return "Unknown"
 
 # =====================================
 # Fresh Cars Logic
@@ -486,7 +472,7 @@ def to_db_datetime(value, date_only=False):
     return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
 
 # =====================================
-# DT conversion
+# ?
 # =====================================
 def get_repair_vehicles():
     conn = sqlite3.connect("vehicle_history.db")

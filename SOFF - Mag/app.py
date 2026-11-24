@@ -237,7 +237,7 @@ else:
 changes_view = changes.loc[
     (changes["change"] != "Unchanged") & (changes["current_defect_status"] != "Online Repairer - Record"),
     ["change",
-     "file_name",
+     "last_updated",
      "body_no",
      "fault_input_date",
      "stn_grp_nm",

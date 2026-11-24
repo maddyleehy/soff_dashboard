@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime, timezone
 
 # =====================================
@@ -64,7 +65,7 @@ def get_part_summary(conn, body_list):
          SUM(
                 CASE
                     WHEN lower(trim(p.status)) = 'open'
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END
@@ -73,7 +74,7 @@ def get_part_summary(conn, body_list):
           SUM(
                 CASE
                     WHEN lower(trim(p.status)) in ('confirmed', 'resolved') 
-                    AND p.text IN('Parts Request (Damaged)' , 'Part missing/wrong') 
+                    AND p.text IN('Part Request (Damaged)' , 'Part missing/wrong') 
                     THEN 1
                     ELSE 0
                 END
@@ -314,6 +315,8 @@ def build_vehicle_summary(bucket_df, defect_summary): #combine bucket and defect
 # Previous Status Logic
 # =====================================
 
+
+
 #Previous status for latest dashboard summary
 def previous_status(conn, row): 
     body_no = row["body_no"]
@@ -368,7 +371,7 @@ def get_status_changes(conn):
     current = (
         df[df["last_updated"] == latest_ts]
         .drop_duplicates("unique_id", keep = "last")
-        [["file_name",          
+        [["last_updated",          
           "body_no", 
           "fault_input_date",
           "stn_grp_nm", 
@@ -400,6 +403,27 @@ def get_status_changes(conn):
    
     return current
 
+
+# =====================================
+# Fresh Cars Logic
+# =====================================
+
+def repair_history_cars(conn, body_list):
+    if not body_list:
+        return set()
+    placeholders = ",".join(["?"] * len(body_list))
+
+    repair_history = pd.read_sql( f"""
+        SELECT DISTINCT body_no
+        FROM defect_history
+        WHERE body_no IN ({placeholders})
+        AND defect_status IN (
+                'Repair In Progress',
+                'Repair Completed, Pending QC Confirm',
+                'QC Accepted'
+        )
+        """, conn, params=body_list)
+    return set(repair_history["body_no"])
 
 # =====================================
 # DT conversion
@@ -448,7 +472,7 @@ def to_db_datetime(value, date_only=False):
     return dt.strftime(DATE_FORMAT if date_only else DATETIME_FORMAT)
 
 # =====================================
-# DT conversion
+# ?
 # =====================================
 def get_repair_vehicles():
     conn = sqlite3.connect("vehicle_history.db")

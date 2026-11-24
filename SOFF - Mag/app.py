@@ -2,15 +2,20 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from db import (
+    get_db_connection,
     load_bucket_csv_to_db, 
     load_defect_csv_to_db, 
     load_parts_csv_to_db, 
     load_dashboard_summary_to_db, 
     init_db,load_te1_master_to_db)
 from utils import (get_latest_bucket, get_bucket_summary, get_defect_summary, get_vehicle_status, 
-                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary)
+                   build_vehicle_summary, previous_status, get_previous_status, get_status_changes, get_part_summary, repair_history_cars)
 
+
+def sg_now():
+    return datetime.now(ZoneInfo("Asia/Singapore"))
 
 #Load once helper function
 
@@ -42,16 +47,11 @@ st.set_page_config(
 )
 
 st.title("Unsigned-Off Vehicle Dashboard")
+
 @st.cache_resource
-
-
-def get_db_connection():
-    return sqlite3.connect(
-        "vehicle_history.db",
-        check_same_thread=False
-    )
-
-conn = get_db_connection()
+def get_conn():
+    return get_db_connection()
+conn = get_conn()
 #st.write(
 #    pd.read_sql(
 #        """
@@ -115,10 +115,10 @@ st.dataframe(all_vehicle_summary)
 # Vehicle Buckets UI
 # ===========================================
 
-st.header("Vehicle Buckets")
+#st.header("Vehicle Buckets")
 
 bucket_summary = get_bucket_summary(latest_bucket_df)
-st.subheader("Vehicle Buckets") # Selected Bucket and display list of vehicles under it
+st.subheader(f"Vehicle Buckets ({len(latest_bucket_df)})") # Selected Bucket and display list of vehicles under it
 
 if bucket_summary.empty:
     st.warning("No bucket data available.")
@@ -189,7 +189,7 @@ st.dataframe(
 
 if st.button("Load Database Snapshot", type="primary"):
     dashboard_summary = all_vehicle_summary.copy()
-    dashboard_summary["snapshot_dt"] = datetime.now()
+    dashboard_summary["snapshot_dt"] = sg_now()
     load_dashboard_summary_to_db(dashboard_summary)
     st.success(
         f"Loaded {len(dashboard_summary)} rows"
@@ -214,43 +214,16 @@ summary = (
     .reset_index()
     .sort_values("change_count", ascending = False)
 )
-
-changes_qty = changes[changes["change"].isin(["Changed"])].groupby(["body_no"])
-new_qty = changes[changes["change"].isin(["New"])].groupby(["body_no"])
-
-# Trial Change Count Logic
-changed_cars = set(
-    changes.loc[
-        changes["change"] == "Changed",
-        "body_no"
-    ]
-)
-all_new_cars = set(
-    changes.groupby("body_no")["change"]
-    .apply(lambda x: (x=="New").all())
-    .loc[lambda x:x]
-    .index
-    )
-
-cars_with_changes = changed_cars - all_new_cars
+cars_with_repair_history = repair_history_cars(conn, summary["body_no"].tolist())
+summary["fresh car"] = summary["body_no"].apply(lambda x: "Yes" if x not in cars_with_repair_history else "No")
+changes_qty = changes[changes["change"].isin(["Changed"])].groupby("body_no")
+changed_body_list = list(changes_qty.groups.keys())
+new_qty = changes[changes["change"].isin(["New"])].groupby("body_no")
 
 st.subheader(f"Body Numbers with Status Changes ({len(summary)})")
-st.write(f"**Body Number with changes:** {len(cars_with_changes)}")
-st.write(f"**Body Number with new defects:** {len(all_new_cars)}")
-for car in [
-    "M2 025205",
-    "M2 028200",
-    "M2 028059",
-    "M2 028204",
-    "M2 029552"
-]:
-    st.write(car)
-    st.write(
-        changes.loc[
-            changes["body_no"] == car,
-            "change"
-        ].value_counts()
-    )
+st.write(f"**Body Number with changes:** {len(summary[summary["fresh car"]=="No"])}")
+st.write(f"**Body Number with new defects:** {len(summary[summary["fresh car"]=="Yes"])}")
+
 
 if summary.empty: #summary -> change_summary
     st.info ("No status changes between the latest and previous load.")
@@ -264,7 +237,7 @@ else:
 changes_view = changes.loc[
     (changes["change"] != "Unchanged") & (changes["current_defect_status"] != "Online Repairer - Record"),
     ["change",
-     "file_name",
+     "last_updated",
      "body_no",
      "fault_input_date",
      "stn_grp_nm",
@@ -348,6 +321,7 @@ search_body = st.text_input(
     "Enter Body No",
     placeholder="e.g. ABC123"
 )
+actual_body_no = None
 
 if search_body:
     search_text = "".join(search_body.split())
@@ -361,6 +335,7 @@ if search_body:
 
     search_result = search_result.drop(columns=["sub_bucket", "status"])
 
+    actual_body_no = None
     if not search_result.empty:
         actual_body_no = search_result.iloc[0]["body_no"]
     #st.dataframe(
@@ -533,7 +508,7 @@ if st.button("Save Repair Status"):
     if save_df.empty:
         st.warning("No changes with a real value to save.")
     else:
-        save_df["last_updated"] = datetime.now()
+        save_df["last_updated"] = sg_now()
         save_df.to_sql(
             "repair_status",
             conn,

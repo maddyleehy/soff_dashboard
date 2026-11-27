@@ -350,28 +350,28 @@ def get_status_changes(conn):
     df = pd.read_sql(
         """
         WITH load_times AS (
-        SELECT DISTINCT last_updated
+        SELECT DISTINCT file_name 
         FROM defect_history
-        ORDER BY last_updated DESC
+        ORDER BY file_name DESC
         LIMIT 2
     )
     SELECT * 
     FROM defect_history
-    WHERE last_updated IN (SELECT last_updated from load_times)
+    WHERE file_name IN (SELECT file_name from load_times)
     """,
     conn,
     )
     if df.empty:
         return df
 
-    latest_ts = df["last_updated"].max()
-    prev_ts = df.loc[df["last_updated"]< latest_ts, "last_updated"].max()
+    latest_ts = df["file_name"].max()
+    prev_ts = df.loc[df["file_name"]< latest_ts, "file_name"].max()
 
     # One row per unique_id in each load (keep the last if duplicates exist)
     current = (
-        df[df["last_updated"] == latest_ts]
+        df[df["file_name"] == latest_ts]
         .drop_duplicates("unique_id", keep = "last")
-        [["last_updated",          
+        [["file_name",          
           "body_no", 
           "fault_input_date",
           "stn_grp_nm", 
@@ -386,7 +386,7 @@ def get_status_changes(conn):
         current["prev_status"]= None
     else:
         previous = (
-            df[df["last_updated"] == prev_ts]
+            df[df["file_name"] == prev_ts]
             .drop_duplicates("unique_id", keep = "last")[["unique_id", "defect_status"]]
             .rename(columns = {"defect_status":"prev_defect_status"})
             

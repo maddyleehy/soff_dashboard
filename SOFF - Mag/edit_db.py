@@ -75,23 +75,25 @@
 # =====================================
 # Run this after removing DB
 # =====================================
-import sqlite3
-TABLES_TO_DROP = [
+#import sqlite3
+#TABLES_TO_DROP = [
    # "dashboard_summary",
     #"bucket_history",
-    "defect_history",
+    #"defect_history",
    # "parts_history",
 
-]
+#]
 
-conn = sqlite3.connect("vehicle_history.db")
-for table in TABLES_TO_DROP:
-    conn.execute(f"DROP TABLE IF EXISTS {table}")
-    print ("dropped", table)
+#conn = sqlite3.connect("vehicle_history.db")
+#for table in TABLES_TO_DROP:
+#    conn.execute(f"DROP TABLE IF EXISTS {table}")
+#    print ("dropped", table)
+#
+##conn.execute("DROP TABLE IF EXISTS bucket_history")
+#conn.commit()
+#conn.close()
 
-#conn.execute("DROP TABLE IF EXISTS bucket_history")
-conn.commit()
-conn.close()
+
 # =====================================
 # Troubleshooting
 # =====================================
@@ -113,22 +115,49 @@ conn.close()
 
 
 
+#import sqlite3
+#
+#conn = sqlite3.connect("data/vehicles.db")  # adjust to your database
+#cur = conn.cursor()
+#cur.execute(
+#    """
+#    UPDATE defect_history
+#    SET file_name = ?
+#    WHERE last_updated = ? AND file_name IS NULL
+#    """,
+#    ("vehicle_defects_20240115", "2024-01-15 09:30:00"),
+#)
+#conn.commit()
+#print(f"Updated {cur.rowcount} rows")
+#conn.close()
+
+
+# =====================================
+# replace value in db
+# =====================================
+import shutil
 import sqlite3
 
-conn = sqlite3.connect("data/vehicles.db")  # adjust to your database
-cur = conn.cursor()
-cur.execute(
-    """
-    UPDATE defect_history
-    SET file_name = ?
-    WHERE last_updated = ? AND file_name IS NULL
-    """,
-    ("vehicle_defects_20240115", "2024-01-15 09:30:00"),
+conn = sqlite3.connect("vehicle_history.db")
+
+##check the content of file_name
+#print(conn.execute("""
+#    SELECT file_name, COUNT(*)
+#    FROM defect_history
+#    WHERE file_name like '%legacy%'
+#    GROUP BY file_name
+#""").fetchall())
+#conn.close
+
+
+
+
+cur = conn.execute (
+    "UPDATE defect_history SET file_name = ? where file_name = ?",
+    ("0", "legacy_load"),
 )
 conn.commit()
-print(f"Updated {cur.rowcount} rows")
+print("Rows updated:", cur.rowcount)
 conn.close()
-
-
 
 

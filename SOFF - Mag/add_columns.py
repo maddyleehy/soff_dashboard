@@ -4,7 +4,9 @@
 # =====================================
 
 from os import name
-import sqlite3
+import pandas as pd
+import numpy as np
+import re
 
 #new_columns = {
 #    "prod_part_status":"TEXT",
@@ -149,3 +151,67 @@ import sqlite3
 #
 
 #python add_columns.py
+
+
+# =====================================
+# troubleshooting
+# =====================================
+
+
+def get_status_changes(conn):
+    """Compare each defect's status between the latest load and the previous load."""
+    df = pd.read_sql(
+        """
+        WITH load_times AS (
+        SELECT DISTINCT last_updated 
+        FROM defect_history
+        ORDER BY last_updated DESC
+        LIMIT 2
+    )
+    SELECT * 
+    FROM defect_history
+    WHERE last_updated IN (SELECT last_updated from load_times)
+    """,
+    conn,
+    )
+    if df.empty:
+        return df
+
+    latest_ts = df["last_updated"].max()
+    prev_ts = df.loc[df["last_updated"]< latest_ts, "last_updated"].max()
+
+    # One row per unique_id in each load (keep the last if duplicates exist)
+    current = (
+        df[df["last_updated"] == latest_ts]
+        .drop_duplicates("unique_id", keep = "last")
+        [["last_updated",          
+          "body_no", 
+          "fault_input_date",
+          "stn_grp_nm", 
+          "inspec_part_nm", 
+          "defect_status",
+          "unique_id"
+          ]]
+        .copy()
+    )
+
+    if pd.isna(prev_ts):
+        current["prev_status"]= None
+    else:
+        previous = (
+            df[df["last_updated"] == prev_ts]
+            .drop_duplicates("unique_id", keep = "last")[["unique_id", "defect_status"]]
+            .rename(columns = {"defect_status":"prev_defect_status"})
+            
+        )
+        current = current.merge(previous, on="unique_id", how="left")
+
+    current ["change"] = current.apply(
+        lambda r:"New" if pd.isna(r["prev_defect_status"])
+        else ("Unchanged" if r["prev_defect_status"] == r["defect_status"] else "Changed"),
+        axis = 1
+    )
+
+    current = current.rename(columns = {"defect_status" : "current_defect_status"})
+   
+    return current
